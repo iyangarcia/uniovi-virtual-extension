@@ -1,7 +1,7 @@
 // Turns a Snapshot into the things a student actually looks at: what's coming up and
 // what's new. Used by the extension (campus panel, notifications); pure, no DOM/Node APIs.
 import { classify, findDates } from "./dates.ts";
-import type { ForumPost, Resource, Snapshot } from "./types.ts";
+import type { ForumPost, GradeItem, Resource, Snapshot } from "./types.ts";
 
 export const TZ = "Europe/Madrid";
 
@@ -94,20 +94,50 @@ export function upcoming(s: Snapshot, days: number, nowMs = Date.now()): Upcomin
 export interface Seen {
   posts: number[];
   resources: string[];
+  /** `${key}=${grade}`, so a changed grade shows up as new again. Missing in older stored state. */
+  grades?: string[];
 }
+
+const gradeId = (g: GradeItem) => `${g.key}=${g.grade}`;
 
 export const seenAll = (s: Snapshot): Seen => ({
   posts: s.posts.map((p) => p.id),
   resources: s.resources.map((r) => r.key),
+  grades: (s.grades ?? []).map(gradeId),
 });
 
-export function unseen(s: Snapshot, seen: Seen): { posts: ForumPost[]; resources: Resource[] } {
+export function unseen(s: Snapshot, seen: Seen): { posts: ForumPost[]; resources: Resource[]; grades: GradeItem[] } {
   const posts = new Set(seen.posts);
   const res = new Set(seen.resources);
+  // State saved before grades existed: treat current grades as seen rather than flooding the panel.
+  const grades = seen.grades ? new Set(seen.grades) : null;
   return {
     posts: s.posts.filter((p) => !posts.has(p.id)).sort((a, b) => b.created - a.created),
     resources: s.resources.filter((r) => !res.has(r.key)),
+    grades: grades ? (s.grades ?? []).filter((g) => !grades.has(gradeId(g))).sort((a, b) => (b.firstSeen ?? 0) - (a.firstSeen ?? 0)) : [],
   };
+}
+
+/**
+ * Carries firstSeen over from the previous snapshot when the grade is unchanged. Grades that
+ * are new or changed keep the firstSeen they arrived with (the extension stamps at sync time,
+ * the server at ingest, which can be later), or get `now`.
+ */
+export function stampGrades(prev: Snapshot | null | undefined, next: Snapshot, now: number): void {
+  const old = new Map((prev?.grades ?? []).map((g) => [g.key, g]));
+  for (const g of next.grades ?? []) {
+    const o = old.get(g.key);
+    // An incoming firstSeen (stamped by the extension when it synced) beats `now` at ingest time.
+    g.firstSeen = o && o.grade === g.grade && o.firstSeen ? o.firstSeen : (g.firstSeen ?? now);
+  }
+}
+
+/** Grades that are new, or whose value changed, compared with the previous snapshot. */
+export function changedGrades(prev: Snapshot | null | undefined, next: Snapshot): GradeItem[] {
+  // A previous snapshot without grades came from an older extension: nothing to compare with.
+  if (!prev?.grades) return [];
+  const old = new Map(prev.grades.map((g) => [g.key, g.grade]));
+  return (next.grades ?? []).filter((g) => old.get(g.key) !== g.grade);
 }
 
 /** A post worth interrupting the user for: mentions an exam/deadline, or carries such a date. */

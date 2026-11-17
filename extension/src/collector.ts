@@ -1,4 +1,4 @@
-import type { Assignment, CalendarEvent, Course, ForumPost, Resource, Snapshot } from "../../shared/types.ts";
+import type { Assignment, CalendarEvent, Course, ForumPost, GradeItem, Resource, Snapshot } from "../../shared/types.ts";
 import { htmlToText, MoodleClient, MoodleError } from "./moodle.ts";
 
 export interface CollectOptions {
@@ -17,6 +17,14 @@ interface ForumRef {
 }
 
 const now = () => Math.floor(Date.now() / 1000);
+
+/** Visible text of an element: screen-reader-only text and controls removed, whitespace collapsed. */
+function cleanText(el: Element | null | undefined, drop = ""): string {
+  if (!el) return "";
+  const copy = el.cloneNode(true) as Element;
+  copy.querySelectorAll(`.sr-only, .visually-hidden, .accesshide, button, input, script, style${drop ? `, ${drop}` : ""}`).forEach((n) => n.remove());
+  return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+}
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
@@ -68,6 +76,9 @@ export async function collect(client: MoodleClient, opts: CollectOptions): Promi
   const assignments = await getAssignments(client, courses, warn);
   const events = await getEvents(client, warn);
 
+  opts.onProgress("Reading grades…");
+  const grades = await getGrades(client, courses, warn);
+
   return {
     syncedAt: now(),
     siteUrl: client.wwwroot,
@@ -76,8 +87,68 @@ export async function collect(client: MoodleClient, opts: CollectOptions): Promi
     posts,
     assignments,
     events,
+    grades,
     warnings: [...warnings],
   };
+}
+
+// ---------------------------------------------------------------- grades
+
+/**
+ * Graded items from each course's user report. The gradereport_* web services are disabled at
+ * Uniovi, so this scrapes HTML: the overview page links every course whose grades students may
+ * see (/course/user.php?mode=grade&id=…&user=…); courses that hide grades (e.g. CPM) are simply
+ * not listed there.
+ */
+async function getGrades(client: MoodleClient, courses: Course[], warn: Warn): Promise<GradeItem[]> {
+  const ids = new Set(courses.map((c) => c.id));
+  let links: Array<{ courseId: number; url: string }> = [];
+  try {
+    const doc = await client.page("/grade/report/overview/index.php");
+    links = [...doc.querySelectorAll<HTMLAnchorElement>("#overview-grade tbody tr a[href]")]
+      .map((a) => ({ courseId: Number(new URL(a.href).searchParams.get("id")), url: a.href }))
+      .filter((l) => ids.has(l.courseId));
+  } catch (err) {
+    warn("grades overview (HTML)", err);
+    return [];
+  }
+  const all = await mapLimit(links, 3, async ({ courseId, url }) => {
+    try {
+      return parseGradeReport(await client.page(new URL(url).pathname + new URL(url).search), courseId, url);
+    } catch (err) {
+      warn(`grades course ${courseId} (HTML)`, err);
+      return [];
+    }
+  });
+  return all.flat();
+}
+
+function parseGradeReport(doc: Document, courseId: number, reportUrl: string): GradeItem[] {
+  const out: GradeItem[] = [];
+  const seen = new Map<string, number>();
+  for (const tr of doc.querySelectorAll("table.user-grade tbody tr")) {
+    const th = tr.querySelector("th.column-itemname");
+    // Items and calculated totals; category header rows have no grade cells.
+    if (!th || !(th.classList.contains("item") || th.classList.contains("baggt"))) continue;
+    // Moodle prints the item type ("Cuestionario", "Elemento manual") above the name.
+    const name = cleanText(th.querySelector(".gradeitemheader")) || cleanText(th, ".dimmed_text, .small");
+    // Quiz grade cells also hold an "Análisis de calificaciones" link.
+    const grade = cleanText(tr.querySelector("td.column-grade"), "a, .action-menu");
+    if (!name || !grade || grade === "-") continue;
+    const n = (seen.get(name) ?? 0) + 1;
+    seen.set(name, n);
+    out.push({
+      key: `${courseId}:${name}${n > 1 ? `#${n}` : ""}`,
+      courseId,
+      name,
+      grade,
+      range: cleanText(tr.querySelector("td.column-range")) || undefined,
+      percentage: cleanText(tr.querySelector("td.column-percentage")).replace(/^-$/, "") || undefined,
+      feedback: cleanText(tr.querySelector("td.column-feedback")) || undefined,
+      url: th.querySelector<HTMLAnchorElement>("a[href]")?.href ?? reportUrl,
+    });
+  }
+  return out;
 }
 
 type Warn = (scope: string, err: unknown) => void;
@@ -182,7 +253,7 @@ async function getCourseContents(
     let section = "";
     for (const tr of doc.querySelectorAll<HTMLTableRowElement>("table.generaltable tbody tr")) {
       // The section name is only printed on the first row of each section group.
-      const sectionText = tr.querySelector("td")?.textContent?.trim();
+      const sectionText = cleanText(tr.querySelector("td"));
       if (sectionText) section = sectionText;
       const a = tr.querySelector<HTMLAnchorElement>('a[href*="/mod/"][href*="view.php?id="]');
       const m = a && /\/mod\/(\w+)\/view\.php\?id=(\d+)/.exec(a.href);
@@ -249,11 +320,14 @@ async function scrapeSectionFiles(client: MoodleClient, course: Course, warn: Wa
       const label = line.split(/[:.]/)[0]!.trim().slice(0, 80);
       const linkText = a.textContent?.trim() ?? "";
       const sectionEl = a.closest('li.section, [data-for="section"]');
+      // Not a selector list: the outer header div also has data-for="section_title" and holds
+      // screen-reader text ("Seleccionar sección … Colapsar Expandir"); the h3 is the title.
+      const titleEl = sectionEl?.querySelector(".sectionname") ?? sectionEl?.querySelector("[data-for='section_title']");
       byKey.set(key, {
         key,
         cmid: Number(m[1]),
         courseId: course.id,
-        section: sectionEl?.querySelector(".sectionname, [data-for='section_title']")?.textContent?.trim() ?? "",
+        section: cleanText(titleEl),
         name: label && label !== linkText ? `${label} (${linkText})` : linkText || filename,
         modname: "section-file",
         url: url.toString(),

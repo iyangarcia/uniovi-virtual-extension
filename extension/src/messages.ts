@@ -5,7 +5,8 @@ import type { BridgeStatus, Resource, Snapshot } from "../../shared/types.ts";
 // subject to the page's network restrictions, the extension worker is not.
 //
 // chrome.storage.local keys: snapshot (latest Snapshot), seen (Seen, for "new since last
-// visit"), pendingBridge (snapshot not yet delivered to the bridge), syncState, settings.
+// visit"), pendingBridge (snapshot not yet delivered to the bridge), syncState, settings,
+// preferences (from the private config.json via the bridge; see shared/lang.ts).
 
 export type Message =
   | { type: "bridge-status" }

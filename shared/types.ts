@@ -1,5 +1,6 @@
 // Data model shared by the extension (producer) and the local server (consumer).
 // Timestamps are Unix seconds, as Moodle returns them.
+import type { Preferences } from "./lang.ts";
 
 export const BRIDGE_PORT = 47823;
 export const BRIDGE_URL = `http://127.0.0.1:${BRIDGE_PORT}`;
@@ -66,6 +67,23 @@ export interface CalendarEvent {
   url?: string;
 }
 
+export interface GradeItem {
+  /** Stable key: `${courseId}:${name}`. */
+  key: string;
+  courseId: number;
+  /** Grade item as named in the gradebook ("Parcial 1", "Seminario 3", "Course total"). */
+  name: string;
+  /** As displayed, e.g. "7,50". Only graded items are collected. */
+  grade: string;
+  range?: string;
+  percentage?: string;
+  feedback?: string;
+  /** The course's user grade report. */
+  url: string;
+  /** When a sync first saw this grade (set on ingest, by comparing with the previous snapshot). */
+  firstSeen?: number;
+}
+
 export interface Snapshot {
   syncedAt: number;
   siteUrl: string;
@@ -74,6 +92,8 @@ export interface Snapshot {
   posts: ForumPost[];
   assignments: Assignment[];
   events: CalendarEvent[];
+  /** Missing in snapshots from older extension versions. */
+  grades?: GradeItem[];
   /** Non-fatal problems during collection (a WS call disabled, a page that failed to parse...). */
   warnings: string[];
 }
@@ -85,4 +105,6 @@ export interface BridgeStatus {
   lastSync?: number;
   /** Resource keys already stored, mapped to the timemodified they were stored with. */
   knownFiles: Record<string, number>;
+  /** From the private config.json (never includes the email). */
+  preferences?: Preferences;
 }

@@ -1,6 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { BRIDGE_PORT, type BridgeStatus, type Resource, type Snapshot } from "../../shared/types.ts";
-import { dataDir, loadIndex, loadSnapshot, saveSnapshot, storeFile } from "./store.ts";
+import { stampGrades } from "../../shared/digest.ts";
+import { courseLabel } from "../../shared/lang.ts";
+import { loadConfig, preferencesOf } from "./config.ts";
+import { dataDir, loadIndex, loadSnapshot, relocateFiles, saveSnapshot, storeFile } from "./store.ts";
 import { VERSION } from "./version.ts";
 
 // Ingest endpoint for the browser extension. Bound to 127.0.0.1 only.
@@ -38,6 +41,11 @@ function send(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
+function folderFor(s: Snapshot, courseId: number): string {
+  const course = s.courses.find((c) => c.id === courseId);
+  return course ? courseLabel(course, s.courses) : String(courseId);
+}
+
 async function route(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
 
@@ -45,8 +53,14 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const [snapshot, index] = await Promise.all([loadSnapshot(), loadIndex()]);
     const knownFiles: Record<string, number> = {};
     for (const f of Object.values(index)) knownFiles[f.key] = f.timemodified;
-    const status: BridgeStatus = { ok: true, version: VERSION, dataDir, lastSync: snapshot?.syncedAt, knownFiles };
+    const preferences = preferencesOf(await loadConfig());
+    const status: BridgeStatus = { ok: true, version: VERSION, dataDir, lastSync: snapshot?.syncedAt, knownFiles, preferences };
     return send(res, 200, status);
+  }
+
+  // Small and cheap: the extension polls it to keep the panel's preferences current.
+  if (req.method === "GET" && url.pathname === "/api/preferences") {
+    return send(res, 200, preferencesOf(await loadConfig()));
   }
 
   if (req.method === "POST" && url.pathname === "/api/snapshot") {
@@ -54,8 +68,13 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     if (!Array.isArray(snapshot.courses) || typeof snapshot.syncedAt !== "number") {
       return send(res, 400, { error: "Not a snapshot" });
     }
+    stampGrades(await loadSnapshot(), snapshot, Math.floor(Date.now() / 1000));
     await saveSnapshot(snapshot);
-    console.error(`[bridge] snapshot: ${snapshot.courses.length} courses, ${snapshot.resources.length} resources`);
+    const moved = await relocateFiles(snapshot, (id) => folderFor(snapshot, id));
+    console.error(
+      `[bridge] snapshot: ${snapshot.courses.length} courses, ${snapshot.resources.length} resources, ${snapshot.grades?.length ?? 0} grades` +
+        (moved ? `; moved ${moved} files to their new folders` : ""),
+    );
     return send(res, 200, { ok: true });
   }
 
@@ -66,10 +85,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     if (!resource.key || !resource.filename) return send(res, 400, { error: "Bad resource metadata" });
     const bytes = await readBody(req, MAX_FILE);
     const snapshot = await loadSnapshot();
-    const course = snapshot?.courses.find((c) => c.id === resource.courseId);
     const stored = await storeFile(
       resource,
-      course?.shortname ?? String(resource.courseId),
+      snapshot ? folderFor(snapshot, resource.courseId) : String(resource.courseId),
       req.headers["content-type"] ?? "application/octet-stream",
       new Uint8Array(bytes),
     );

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isImportant, seenAll, unseen, upcoming } from "../../shared/digest.ts";
+import { changedGrades, isImportant, seenAll, stampGrades, unseen, upcoming } from "../../shared/digest.ts";
 import type { Snapshot } from "../../shared/types.ts";
 
 const now = Date.parse("2026-11-17T10:00:00Z");
@@ -46,4 +46,22 @@ test("unseen and importance", () => {
   assert.deepEqual(unseen(snap, seen).posts.map((p) => p.id), [10]);
   assert.equal(isImportant(snap.posts[0]!), true);
   assert.equal(isImportant(snap.posts[1]!), false);
+});
+
+test("grades: changes, stamps and unseen", () => {
+  const grade = (name: string, value: string) => ({ key: `1:${name}`, courseId: 1, name, grade: value, url: "g" });
+  const prev: Snapshot = { ...snap, grades: [{ ...grade("Parcial 1", "6,00"), firstSeen: 100 }] };
+  const next: Snapshot = { ...snap, grades: [grade("Parcial 1", "7,00"), grade("Seminario 1", "9,00"), { ...grade("Lab", "5"), firstSeen: 150 }] };
+
+  assert.deepEqual(changedGrades(prev, next).map((g) => g.name), ["Parcial 1", "Seminario 1", "Lab"]);
+  assert.deepEqual(changedGrades({ ...snap }, next), [], "previous snapshot from an older version: nothing to compare");
+
+  stampGrades(prev, next, 200);
+  assert.deepEqual(next.grades!.map((g) => g.firstSeen), [200, 200, 150], "changed grade restamped; incoming stamp kept");
+  const again: Snapshot = { ...snap, grades: next.grades!.map((g) => ({ ...g, firstSeen: undefined })) };
+  stampGrades(next, again, 300);
+  assert.deepEqual(again.grades!.map((g) => g.firstSeen), [200, 200, 150], "unchanged grades keep their first stamp");
+
+  assert.deepEqual(unseen(next, seenAll(prev)).grades.map((g) => g.name).sort(), ["Lab", "Parcial 1", "Seminario 1"]);
+  assert.deepEqual(unseen(next, { posts: [], resources: [] }).grades, [], "state without grades: nothing flagged");
 });

@@ -3,6 +3,7 @@
 // local bridge or Claude. Rendered in a shadow root (Moodle CSS can't leak in) and built
 // with textContent only: post subjects and names come from the site and are untrusted.
 import { seenAll, TZ, unseen, upcoming, type Seen, type UpcomingItem } from "../../shared/digest.ts";
+import { courseLabel, isLowPriority, type Preferences } from "../../shared/lang.ts";
 import type { Snapshot } from "../../shared/types.ts";
 import type { SyncState } from "./messages.ts";
 
@@ -71,6 +72,8 @@ li:first-child { border-top: 0; }
 .deadline { background: #fff1d6; color: #8a5300; }
 .event { background: #eceff3; color: #4a525a; }
 .forum { font-size: 11px; color: #6a737b; border-bottom: 1px dotted; cursor: help; margin-left: .35rem; }
+.grade { background: #e3f4e8; color: #1e6b35; }
+.low { opacity: .55; }
 .empty { color: #6a737b; padding: .4rem 0; }
 .more { margin-top: .4rem; }
 `;
@@ -85,13 +88,22 @@ export function mountPanel(onSync: () => void): void {
   let expanded = false;
 
   const render = async () => {
-    const { snapshot, seen, syncState } = (await chrome.storage.local.get(["snapshot", "seen", "syncState"])) as {
+    const { snapshot, seen, syncState, preferences } = (await chrome.storage.local.get(["snapshot", "seen", "syncState", "preferences"])) as {
       snapshot?: Snapshot;
       seen?: Seen;
       syncState?: SyncState;
+      preferences?: Preferences;
     };
-    // "Computabilidad (Grupos en Castellano) (Grado en …)" -> "Computabilidad"
-    const courseName = (id?: number) => (snapshot?.courses.find((c) => c.id === id)?.fullname ?? "").split(" (")[0]!;
+    const courseOf = (id?: number) => snapshot?.courses.find((c) => c.id === id);
+    // "Computabilidad (Grupos en Castellano) (Grado en …)" -> "Computabilidad (Spanish group)"
+    const courseName = (id?: number) => {
+      const c = courseOf(id);
+      return c && snapshot ? courseLabel(c, snapshot.courses) : "";
+    };
+    // Deprioritised courses stay visible, just dimmed and after the rest.
+    const low = (id?: number) => isLowPriority(courseOf(id), preferences ?? {});
+    const lowAttr = (id?: number): Record<string, string> => (low(id) ? { class: "low" } : {});
+    const lowLast = <T,>(xs: T[], id: (x: T) => number | undefined) => [...xs.filter((x) => !low(id(x))), ...xs.filter((x) => low(id(x)))];
 
     const syncBtn = h("button", syncState?.running ? { disabled: "" } : {}, syncState?.running ? "Actualizando…" : "Actualizar");
     syncBtn.addEventListener("click", onSync);
@@ -121,7 +133,7 @@ export function mountPanel(onSync: () => void): void {
       ...shown.map((i) =>
         h(
           "li",
-          {},
+          lowAttr(i.courseId),
           h("div", { class: "when" }, h("b", {}, dayLabel.format(Date.parse(`${i.date}T12:00:00Z`))), h("span", {}, [untilLabel(i.date), i.clock].filter(Boolean).join(" · "))),
           h(
             "div",
@@ -147,14 +159,31 @@ export function mountPanel(onSync: () => void): void {
     // ---- news since last "mark as seen"
     const news = unseen(snapshot, seen ?? seenAll(snapshot));
     const newsItems: HTMLElement[] = [
-      ...news.posts.slice(0, 6).map((p) =>
-        h("li", {}, h("div", { class: "body" }, h("a", { class: "title", href: p.url }, p.subject || "(sin asunto)"), h("div", { class: "sub" }, `${courseName(p.courseId)} · ${p.forumName} · ${ago(p.created)}`))),
+      ...news.grades.slice(0, 6).map((g) =>
+        h(
+          "li",
+          lowAttr(g.courseId),
+          h(
+            "div",
+            { class: "body" },
+            h("span", { class: "chip grade" }, "Nota"),
+            h("a", { class: "title", href: g.url }, `${g.name}: ${g.grade}`),
+            h("div", { class: "sub" }, [courseName(g.courseId), g.range && `rango ${g.range}`, g.firstSeen && ago(g.firstSeen)].filter(Boolean).join(" · ")),
+          ),
+        ),
       ),
-      ...news.resources.slice(0, 6).map((r) =>
-        h("li", {}, h("div", { class: "body" }, h("span", { class: "chip event" }, "Material"), h("a", { class: "title", href: r.url.replace("&redirect=1", "") }, r.filename ?? r.name), h("div", { class: "sub" }, `${courseName(r.courseId)} · ${r.section}`))),
-      ),
+      ...lowLast(news.posts, (p) => p.courseId)
+        .slice(0, 6)
+        .map((p) =>
+          h("li", lowAttr(p.courseId), h("div", { class: "body" }, h("a", { class: "title", href: p.url }, p.subject || "(sin asunto)"), h("div", { class: "sub" }, `${courseName(p.courseId)} · ${p.forumName} · ${ago(p.created)}`))),
+        ),
+      ...lowLast(news.resources, (r) => r.courseId)
+        .slice(0, 6)
+        .map((r) =>
+          h("li", lowAttr(r.courseId), h("div", { class: "body" }, h("span", { class: "chip event" }, "Material"), h("a", { class: "title", href: r.url.replace("&redirect=1", "") }, r.filename ?? r.name), h("div", { class: "sub" }, `${courseName(r.courseId)} · ${r.section}`))),
+        ),
     ];
-    const hidden = news.posts.length + news.resources.length - newsItems.length;
+    const hidden = news.grades.length + news.posts.length + news.resources.length - newsItems.length;
     const markBtn = h("button", { class: "ghost" }, "Marcar como visto");
     markBtn.addEventListener("click", () => void chrome.storage.local.set({ seen: seenAll(snapshot) }));
     const newsSection = h(
@@ -169,7 +198,7 @@ export function mountPanel(onSync: () => void): void {
   };
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && (changes.snapshot || changes.seen || changes.syncState)) void render();
+    if (area === "local" && (changes.snapshot || changes.seen || changes.syncState || changes.preferences)) void render();
   });
   void render();
 }

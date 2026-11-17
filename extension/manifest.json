@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Uniovi Virtual → Claude",
+  "version": "0.2.0",
+  "description": "Upcoming exams, deadlines and new announcements on your Uniovi Virtual dashboard, notifications for important posts, and your course material available to Claude.",
+  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "scripting"],
+  "host_permissions": [
+    "https://*.campusvirtual.uniovi.es/*",
+    "https://campusvirtual.uniovi.es/*",
+    "http://127.0.0.1:47823/*"
+  ],
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://*.campusvirtual.uniovi.es/*", "https://campusvirtual.uniovi.es/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Uniovi Virtual → Claude",
+    "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png" }
+  }
+}

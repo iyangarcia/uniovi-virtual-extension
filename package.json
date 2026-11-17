@@ -1,0 +1,28 @@
+{
+  "name": "uniovi-virtual-claude",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension + local MCP bridge that gives Claude access to Uniovi Virtual (Moodle) materials, forum announcements, exam dates and deadlines.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc -p extension && tsc -p server",
+    "test": "node --test \"server/test/**/*.test.ts\"",
+    "serve": "node server/dist/index.js --http-only",
+    "mcp": "node server/dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "fflate": "^0.8.3",
+    "unpdf": "^2.2.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

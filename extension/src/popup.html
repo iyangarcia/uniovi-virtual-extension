@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Uniovi Virtual → Claude</title>
+    <style>
+      :root { color-scheme: light dark; font: 13px system-ui, sans-serif; }
+      body { width: 320px; margin: 0; padding: 12px; }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+      .status { padding: 8px; border-radius: 6px; background: color-mix(in srgb, currentColor 8%, transparent); min-height: 2.6em; white-space: pre-wrap; }
+      .status.error { color: #c62828; }
+      .bridge { font-size: 12px; opacity: 0.8; }
+      .bridge.down { color: #c62828; opacity: 1; }
+      button { width: 100%; padding: 8px; font-weight: 600; cursor: pointer; margin: 8px 0; }
+      fieldset { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 6px; padding: 6px 10px; }
+      legend { font-size: 12px; opacity: 0.8; }
+      input[type="number"] { width: 4em; }
+    </style>
+  </head>
+  <body>
+    <h1>Uniovi Virtual → Claude</h1>
+    <div id="bridge" class="bridge">Checking local bridge…</div>
+    <div id="status" class="status"></div>
+    <button id="sync">Sync now</button>
+    <fieldset>
+      <legend>Settings</legend>
+      <label class="row">Courses
+        <select id="courseScope">
+          <option value="inprogress">In progress</option>
+          <option value="all">All (incl. past)</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" id="autoSync" /> Auto-sync every <input type="number" id="autoSyncHours" min="1" /> h</label>
+      <label class="row"><input type="checkbox" id="downloadFiles" /> Download files up to <input type="number" id="maxFileMB" min="1" /> MB</label>
+      <label class="row">Forum replies from last <input type="number" id="replyWindowDays" min="0" /> days</label>
+      <label class="row"><input type="checkbox" id="notify" /> Notify me about new announcements</label>
+    </fieldset>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

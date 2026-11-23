@@ -11,7 +11,8 @@
     "typecheck": "tsc -p extension && tsc -p server",
     "test": "node --test \"server/test/**/*.test.ts\"",
     "serve": "node server/dist/index.js --http-only",
-    "mcp": "node server/dist/index.js"
+    "mcp": "node server/dist/index.js",
+    "remote": "node server/dist/index.js --remote"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

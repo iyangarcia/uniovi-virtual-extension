@@ -85,4 +85,6 @@ export interface BridgeStatus {
   lastSync?: number;
   /** Resource keys already stored, mapped to the timemodified they were stored with. */
   knownFiles: Record<string, number>;
+  /** Public MCP connector URL for web AIs, while `npm run remote` is running. Secret: grants read access. */
+  remoteUrl?: string;
 }

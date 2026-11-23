@@ -9,7 +9,8 @@ import { loadRemoteState, saveRemoteState } from "./store.ts";
 // Access control is the secret path: only /mcp/<token> is served; everything else, including
 // a wrong token, is a plain 404 so the endpoint can't be discovered. All tools are read-only.
 
-export const REMOTE_PORT = 47824;
+// UNIOVI_REMOTE_PORT: dev/test override so parallel runs do not fight over 47824.
+export const REMOTE_PORT = Number(process.env.UNIOVI_REMOTE_PORT) || 47824;
 const MAX_BODY = 1024 * 1024;
 const RATE_PER_MINUTE = 240;
 

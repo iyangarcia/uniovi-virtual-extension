@@ -79,7 +79,10 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   send(res, 404, { error: "Not found" });
 }
 
-export function startHttp(port = BRIDGE_PORT): Promise<Server | null> {
+// UNIOVI_BRIDGE_PORT: dev/test override so parallel runs do not fight over 47823 (the extension always uses 47823).
+export const BRIDGE_LISTEN_PORT = Number(process.env.UNIOVI_BRIDGE_PORT) || BRIDGE_PORT;
+
+export function startHttp(port = BRIDGE_LISTEN_PORT): Promise<Server | null> {
   const server = createServer((req, res) => {
     if (!allowed(req)) return send(res, 403, { error: "Forbidden" });
     route(req, res).catch((err: Error & { status?: number }) => {

@@ -1,6 +1,6 @@
 // Stop hook: keeps Claude working until every box in GOAL.md is ticked and the checks pass.
 // Disable by removing the hook from .claude/settings.json or deleting GOAL.md.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 const dir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
@@ -12,16 +12,21 @@ const counter = `${dir}/.claude/goal-iterations`;
 const n = existsSync(counter) ? Number(readFileSync(counter, "utf8")) || 0 : 0;
 if (n >= MAX) process.exit(0); // safety cap
 
-const open = readFileSync(goalFile, "utf8").split(/\r?\n/).filter((l) => /^\s*- \[ \]/.test(l));
+const open = readFileSync(goalFile, "utf8").split(/\r?\n/).filter((l) => /^\s*[-*] \[ \]/.test(l));
 
 let failing = "";
 try {
-  execSync("npm run typecheck && npm test && npm run build", { cwd: dir, stdio: "pipe" });
+  // Timeout below the hook's 600 s: a hang must block the stop, not time the hook out (which lets it through).
+  execSync("npm run typecheck && npm test && npm run build", { cwd: dir, stdio: "pipe", timeout: 540_000 });
 } catch (e) {
-  failing = `${e.stdout ?? ""}${e.stderr ?? ""}`.slice(-3000);
+  failing = (e.signal ? `Checks timed out or were killed (${e.signal}).
+` : "") + `${e.stdout ?? ""}${e.stderr ?? ""}`.slice(-3000);
 }
 
-if (open.length === 0 && !failing) process.exit(0);
+if (open.length === 0 && !failing) {
+  rmSync(counter, { force: true }); // next goal starts with a fresh budget
+  process.exit(0);
+}
 
 writeFileSync(counter, String(n + 1));
 console.log(

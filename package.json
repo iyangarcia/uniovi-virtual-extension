@@ -9,7 +9,7 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc -p extension && tsc -p server",
-    "test": "node --test \"server/test/**/*.test.ts\"",
+    "test": "node --test --test-force-exit \"server/test/**/*.test.ts\"",
     "serve": "node server/dist/index.js --http-only",
     "mcp": "node server/dist/index.js",
     "remote": "node server/dist/index.js --remote"

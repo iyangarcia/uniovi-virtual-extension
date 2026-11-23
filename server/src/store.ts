@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
+import type { TunnelStatus } from "../../shared/helper.ts";
 import type { Resource, Snapshot } from "../../shared/types.ts";
+import { effectiveDataDir } from "./config.ts";
 
-// On-disk layout (dataDir defaults to ~/uniovi-data, override with UNIOVI_DATA_DIR):
+// On-disk layout. dataDir: UNIOVI_DATA_DIR env > config.json dataDir > existing ~/uniovi-data >
+// ~/Documents/Uniovi (see config.ts). Read once at startup: changing it means restarting the helper.
 //   snapshot.json        latest Snapshot pushed by the extension
 //   files-index.json     resource key -> StoredFile
 //   files/<course>/<section>/<filename>
@@ -21,7 +23,7 @@ export interface StoredFile {
   resource: Resource;
 }
 
-export const dataDir = resolve(process.env.UNIOVI_DATA_DIR ?? join(homedir(), "uniovi-data"));
+export const dataDir = resolve(effectiveDataDir());
 
 const snapshotPath = join(dataDir, "snapshot.json");
 const indexPath = join(dataDir, "files-index.json");
@@ -154,15 +156,18 @@ export async function writeCache(f: StoredFile, text: string) {
 }
 
 // ---------------------------------------------------------------- remote connector state
-// remote.json holds the secret token of the public MCP URL and, while `--remote` runs, the
-// current tunnel URL, so /api/status can show it in the popup even from another process.
+// remote.json holds the secret token of the public MCP URL and, while `--remote` / `--service`
+// runs, the current tunnel URL and state, so /api/status can show them in the popup even when
+// another process serves the bridge.
 
 export interface RemoteState {
   token: string;
-  /** Full connector URL (https://….trycloudflare.com/mcp/<token>) while a tunnel is up. */
+  /** Full connector URL (https://…/mcp/<token>) while a tunnel is up. */
   publicUrl?: string;
-  /** pid of the `--remote` process that owns publicUrl. */
+  /** pid of the `--remote` / `--service` process that owns publicUrl and tunnel. */
   pid?: number;
+  /** Tunnel state written by the owning process (`--service` keeps it current). */
+  tunnel?: TunnelStatus;
 }
 
 const remotePath = join(dataDir, "remote.json");
@@ -175,14 +180,25 @@ export async function saveRemoteState(s: RemoteState) {
   await writeAtomic(remotePath, JSON.stringify(s, null, 1));
 }
 
+export function pidAlive(pid: number | undefined): boolean {
+  if (!pid || !Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM: the process exists but belongs to someone else.
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** URL and tunnel state published by the remote/service process, if that process is still alive. */
+export async function liveRemote(): Promise<{ remoteUrl?: string; tunnel?: TunnelStatus }> {
+  const s = await loadRemoteState();
+  if (!s?.pid || !pidAlive(s.pid)) return {};
+  return { remoteUrl: s.publicUrl, tunnel: s.tunnel };
+}
+
 /** The connector URL, if the process that published it is still alive. */
 export async function liveRemoteUrl(): Promise<string | undefined> {
-  const s = await loadRemoteState();
-  if (!s?.publicUrl || !s.pid) return undefined;
-  try {
-    process.kill(s.pid, 0);
-    return s.publicUrl;
-  } catch {
-    return undefined;
-  }
+  return (await liveRemote()).remoteUrl;
 }

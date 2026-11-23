@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { BRIDGE_PORT, type BridgeStatus, type Resource, type Snapshot } from "../../shared/types.ts";
-import { dataDir, liveRemoteUrl, loadIndex, loadSnapshot, saveSnapshot, storeFile } from "./store.ts";
+import { dataDir, liveRemote, loadIndex, loadSnapshot, saveSnapshot, storeFile } from "./store.ts";
 import { VERSION } from "./version.ts";
 
 // Ingest endpoint for the browser extension. Bound to 127.0.0.1 only.
@@ -42,10 +42,19 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
 
   if (req.method === "GET" && url.pathname === "/api/status") {
-    const [snapshot, index, remoteUrl] = await Promise.all([loadSnapshot(), loadIndex(), liveRemoteUrl()]);
+    const [snapshot, index, remote] = await Promise.all([loadSnapshot(), loadIndex(), liveRemote()]);
     const knownFiles: Record<string, number> = {};
     for (const f of Object.values(index)) knownFiles[f.key] = f.timemodified;
-    const status: BridgeStatus = { ok: true, version: VERSION, dataDir, lastSync: snapshot?.syncedAt, knownFiles, remoteUrl };
+    const status: BridgeStatus = {
+      ok: true,
+      version: VERSION,
+      helperVersion: VERSION,
+      dataDir,
+      lastSync: snapshot?.syncedAt,
+      knownFiles,
+      remoteUrl: remote.remoteUrl,
+      tunnel: remote.tunnel,
+    };
     return send(res, 200, status);
   }
 

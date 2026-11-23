@@ -7,3 +7,4 @@ server/dist/
 .claude/goal-iterations
 .claude/settings.local.json
 .claude/worktrees/
+release/

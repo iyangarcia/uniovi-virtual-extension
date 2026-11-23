@@ -10,7 +10,7 @@ import { after, before, mock, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { BRIDGE_PORT, type BridgeStatus, type Snapshot } from "../../shared/types.ts";
+import type { BridgeStatus, Snapshot } from "../../shared/types.ts";
 
 // store.ts reads UNIOVI_DATA_DIR at import time, so point it at a temp dir before importing the server.
 process.env.UNIOVI_DATA_DIR = mkdtempSync(join(tmpdir(), "uniovi-checks-test-"));
@@ -221,23 +221,13 @@ test("searchAll: one result per file, posts need every term, newest post first, 
 });
 
 // ---------------------------------------------------------------- http.ts (ingest bridge)
-// startHttp() always listens on BRIDGE_PORT, which a running bridge may hold. For that one call,
-// Server.prototype.listen is patched to use port 0, so the real ingest server runs on an ephemeral port.
+// Port 0: a running bridge may hold BRIDGE_PORT, so the real ingest server runs on an ephemeral port.
 
 let bridgeServer: Server;
 let bridgePort: number;
 
 before(async () => {
-  const listen = http.Server.prototype.listen;
-  http.Server.prototype.listen = function (this: Server, ...args: unknown[]) {
-    if (args[0] === BRIDGE_PORT) args[0] = 0;
-    return (listen as (...a: unknown[]) => Server).apply(this, args);
-  } as typeof listen;
-  try {
-    bridgeServer = (await bridge.startHttp())!;
-  } finally {
-    http.Server.prototype.listen = listen;
-  }
+  bridgeServer = (await bridge.startHttp(0))!;
   bridgePort = (bridgeServer.address() as AddressInfo).port;
 });
 

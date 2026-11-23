@@ -160,3 +160,21 @@ Final check in the real repo: `npm run typecheck && npm test && npm run build` �
    connection", which a failed api request never prints. The regex is still worth tightening.
 5. http.ts has no port parameter: `startHttp(port = BRIDGE_PORT)` would let tests drop the listen() patch.
 6. Not covered: extract.ts (PDF/PPTX/DOCX text), the read_material offset/maxChars paging, and the extension.
+
+### Follow-up fixes
+Each fix has a test that was seen failing before the change and passing after.
+1. remote.test.ts hang: `after` now does `server.closeAllConnections(); server.close()`. Checked by breaking
+   the get_deadlines assertion: without the change `node --test server/test/remote.test.ts` hung (killed
+   at 60s); with it, the file fails in ~4s. Assertion reverted.
+2. tunnel.ts: `URL_RE` is `/https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/i`; the "Registered tunnel
+   connection" gating is unchanged. Test: remote.test.ts "the trycloudflare API host in a cloudflared
+   error is not a tunnel URL".
+3. mcp.ts materialText: an offset at or past the end (when > 0) is a user error, "offset N is past the end
+   (M chars)", not a "chars N-N of M" header. Test: extract.test.ts "read_material with an offset past the end…".
+4. checks.test.ts: the listen() patch is gone; the bridge tests call `startHttp(0)`. Coverage is unchanged.
+5. New server/test/extract.test.ts covers kindOf, plain text, a generated DOCX (paragraphs, entities), a
+   generated PPTX (numeric slide order incl. slide10, `--- slide N ---` markers, `[notes]`, non-slide parts
+   ignored), unsupported → null, the cache, and read_material paging (offset/maxChars/nextOffset, last page
+   without nextOffset, default maxChars). PDF is not covered because generating one needs a PDF writer
+   the project doesn't depend on.
+Final: `npm run typecheck && npm test && npm run build` → exit 0, 61/61 tests.

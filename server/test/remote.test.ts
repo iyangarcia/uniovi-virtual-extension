@@ -47,7 +47,10 @@ before(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
-after(() => server.close());
+after(() => {
+  server.closeAllConnections();
+  server.close();
+});
 
 async function connect(url: string) {
   const client = new Client({ name: "test", version: "0" });
@@ -131,6 +134,12 @@ test("parses the quick-tunnel URL out of cloudflared output", () => {
 2026-11-23T10:00:02Z INF |  https://seasonal-quiet-lamp-river.trycloudflare.com                                       |`;
   assert.equal(parseTunnelUrl(out), "https://seasonal-quiet-lamp-river.trycloudflare.com");
   assert.equal(parseTunnelUrl("Requesting new quick Tunnel on trycloudflare.com..."), null);
+});
+
+test("the trycloudflare API host in a cloudflared error is not a tunnel URL", () => {
+  const err = `2026-11-23T10:00:01Z ERR Error unmarshaling QuickTunnel response: failed to request quick Tunnel: Post "https://api.trycloudflare.com/tunnel": dial tcp: i/o timeout`;
+  assert.equal(parseTunnelUrl(err), null);
+  assert.equal(parseTunnelUrl(`${err}\n|  https://brave-api-river.trycloudflare.com  |`), "https://brave-api-river.trycloudflare.com");
 });
 
 test("--rotate-token makes a new token (runs last: the live server keeps the old one)", async () => {

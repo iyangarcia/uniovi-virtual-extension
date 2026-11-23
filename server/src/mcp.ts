@@ -374,6 +374,9 @@ async function materialText(key: string, offset: number, maxChars: number, remot
       ? { note: `Text extraction not supported for this file type (${f.contentType}).`, url: f.resource.url }
       : { note: `Text extraction not supported for this file type (${f.contentType}). Open it directly from localPath.`, localPath: absolutePath(f) };
   }
+  if (offset > 0 && offset >= text.length) {
+    throw new UserError(`offset ${offset} is past the end (${text.length} chars). Use an offset below ${text.length}, or 0 to start over.`);
+  }
   const slice = text.slice(offset, offset + maxChars);
   const next = offset + slice.length < text.length ? offset + slice.length : undefined;
   const where = remote ? `url: ${f.resource.url}` : `localPath: ${absolutePath(f)}`;

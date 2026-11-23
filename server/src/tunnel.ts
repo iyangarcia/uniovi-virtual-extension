@@ -2,8 +2,10 @@ import { spawn, type ChildProcess } from "node:child_process";
 
 // Cloudflare quick tunnel: `cloudflared tunnel --url http://127.0.0.1:PORT` needs no account and
 // prints a random https://<words>.trycloudflare.com URL on stderr. The URL changes on every start.
+// api.trycloudflare.com is the endpoint cloudflared asks for a tunnel; it shows up in the
+// "failed to request quick Tunnel" error and must never be taken for the tunnel URL.
 
-const URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i;
+const URL_RE = /https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/i;
 
 export function parseTunnelUrl(output: string): string | null {
   return URL_RE.exec(output)?.[0] ?? null;

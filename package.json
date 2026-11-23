@@ -12,7 +12,8 @@
     "test": "node --test --test-force-exit \"server/test/**/*.test.ts\"",
     "serve": "node server/dist/index.js --http-only",
     "mcp": "node server/dist/index.js",
-    "remote": "node server/dist/index.js --remote"
+    "remote": "node server/dist/index.js --remote",
+    "package:host": "node scripts/build-host.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

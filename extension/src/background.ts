@@ -1,5 +1,6 @@
 import { isImportant, seenAll } from "../../shared/digest.ts";
 import { BRIDGE_URL, type BridgeStatus, type Snapshot } from "../../shared/types.ts";
+import { remoteUrlChange } from "./helperState.ts";
 import { getSettings, type Message, type Reply, type SyncState } from "./messages.ts";
 
 const CAMPUS_TAB_PATTERNS = ["https://*.campusvirtual.uniovi.es/*", "https://campusvirtual.uniovi.es/*"];
@@ -83,7 +84,46 @@ async function notifyNewPosts(prev: Snapshot, next: Snapshot) {
   }
 }
 
+// ---------------------------------------------------------------- connector URL changes
+
+/**
+ * The tunnel URL changes when the helper restarts; the student must paste the new one into their AI.
+ * Notifies once per change (fixed notification id, so concurrent checks replace rather than stack).
+ * `knownRemoteUrl` is set the first time a URL is seen (popup open or alarm), never notified itself.
+ */
+async function checkRemoteUrl(status: BridgeStatus) {
+  const { knownRemoteUrl } = (await chrome.storage.local.get("knownRemoteUrl")) as { knownRemoteUrl?: string };
+  const change = remoteUrlChange(knownRemoteUrl, status.remoteUrl);
+  if (change.known !== knownRemoteUrl) await chrome.storage.local.set({ knownRemoteUrl: change.known });
+  if (!change.notify) return;
+  chrome.notifications.create("remote-url", {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Ha cambiado la URL del conector",
+    message: "Pega la nueva URL en tu IA (ChatGPT, Gemini o Claude). Cópiala desde el botón de la extensión.",
+    priority: 2,
+    requireInteraction: true,
+  });
+}
+
+async function bridgeStatus(): Promise<BridgeStatus> {
+  const status = (await (await bridge("/api/status")).json()) as BridgeStatus;
+  await checkRemoteUrl(status).catch((e) => console.warn("[uniovi] remote url check", e));
+  return status;
+}
+
+/** Alarm probe, only once the student has had a connector URL: without the helper nothing new runs. */
+async function pollRemoteUrl() {
+  const { knownRemoteUrl } = await chrome.storage.local.get("knownRemoteUrl");
+  if (knownRemoteUrl) await bridgeStatus().catch(() => undefined);
+}
+
 chrome.notifications.onClicked.addListener(async (id) => {
+  if (id === "remote-url") {
+    chrome.notifications.clear(id);
+    await chrome.action.openPopup().catch(() => undefined); // needs a focused window; otherwise the toolbar button opens it
+    return;
+  }
   const { snapshot } = (await chrome.storage.local.get("snapshot")) as { snapshot?: Snapshot };
   if (!snapshot) return;
   const postId = /^post:(\d+)$/.exec(id)?.[1];
@@ -120,7 +160,7 @@ async function triggerSync(tabId?: number): Promise<void> {
 async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
     case "bridge-status":
-      return (await (await bridge("/api/status")).json()) as BridgeStatus;
+      return bridgeStatus();
 
     case "snapshot-collected":
       await onSnapshot(msg.snapshot);
@@ -189,7 +229,10 @@ chrome.runtime.onInstalled.addListener(() => void ensureAlarms());
 chrome.runtime.onStartup.addListener(() => void ensureAlarms());
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "bridge-flush") return flushBridge();
+  if (alarm.name === "bridge-flush") {
+    await flushBridge();
+    return pollRemoteUrl();
+  }
   if (alarm.name !== "periodic-sync") return;
   const settings = await getSettings();
   const { syncState } = await chrome.storage.local.get("syncState");

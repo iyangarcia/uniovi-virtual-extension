@@ -9,7 +9,8 @@ import { APP_DIR_NAME, DEFAULT_HELPER_CONFIG, defaultDataDir, type HelperConfig 
 // Installed layout (built by `npm run package`):
 //   <appDir>\node.exe        portable Node
 //   <appDir>\helper.js       bundled server (`--service`)
-//   <appDir>\host.js         bundled native-messaging host; host.cmd runs it with node.exe
+//   <appDir>\package.json    {"type":"module"} for the ESM helper.js
+//   <appDir>\host.cjs        bundled native-messaging host (CommonJS); host.cmd runs it with node.exe
 //   <appDir>\config.json     HelperConfig
 //   <appDir>\helper.pid      pid of the running helper (written by --service, removed on clean exit)
 //   <appDir>\logs\           helper logs

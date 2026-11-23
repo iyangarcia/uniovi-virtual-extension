@@ -5,8 +5,8 @@
 //   release/app/helper.js     server with EVERY package bundled; runs with a plain node.exe and no
 //                             node_modules (`node helper.js --service`)
 //   release/app/package.json  {"type":"module"}: helper.js is ESM (top-level await), and Node only
-//                             treats a .js file as ESM without guessing when this says so. Anything
-//                             else installed next to it (host.js) is therefore ESM too.
+//                             treats a .js file as ESM without guessing when this says so. That is
+//                             why the CommonJS native host next to it is named host.cjs.
 import { copyFile, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import * as esbuild from "esbuild";
 

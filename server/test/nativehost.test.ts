@@ -86,7 +86,7 @@ test("extension ID is derived from the manifest key (Chrome: sha256 of the DER k
 // A fake helper.js (agent B's real bundle isn't on this branch): writes the pid file like --service
 // does and answers GET /api/status on UNIOVI_BRIDGE_PORT.
 const FAKE_HELPER = `
-const http = require("node:http"), fs = require("node:fs"), path = require("node:path");
+import http from "node:http"; import fs from "node:fs"; import path from "node:path";
 const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify({ ok: true, version: "fake", dataDir: process.env.UNIOVI_DATA_DIR, knownFiles: {}, argv: process.argv.slice(2) }));
@@ -121,8 +121,10 @@ const alive = (pid: number) => {
 before(async () => {
   mkdirSync(appDir, { recursive: true });
   // Same bundle options as scripts/build-host.mjs (CommonJS, Node built-ins only).
-  await esbuild.build({ entryPoints: ["server/src/nativehost.ts"], outfile: join(installDir, "host.js"), bundle: true, format: "cjs", platform: "node", target: "node22", logLevel: "silent" });
+  await esbuild.build({ entryPoints: ["server/src/nativehost.ts"], outfile: join(installDir, "host.cjs"), bundle: true, format: "cjs", platform: "node", target: "node22", logLevel: "silent" });
   writeFileSync(join(installDir, "helper.js"), FAKE_HELPER);
+  // Same as release/app: the real helper.js is ESM, so the folder carries {"type":"module"} (host must be .cjs).
+  writeFileSync(join(installDir, "package.json"), JSON.stringify({ type: "module" }));
   port = await freePort();
 });
 
@@ -133,7 +135,7 @@ after(() => {
 
 /** A host process plus a framed request/reply helper, like Chrome's connectNative. */
 function startHost(): { child: ChildProcess; ask: (msg: unknown) => Promise<NativeReply>; askRaw: (frame: Buffer) => Promise<NativeReply> } {
-  const child = spawn(process.execPath, [join(installDir, "host.js"), "chrome-extension://amagekgnbkaeigjhbenkilkhoklkdieo/", "--parent-window=0"], {
+  const child = spawn(process.execPath, [join(installDir, "host.cjs"), "chrome-extension://amagekgnbkaeigjhbenkilkhoklkdieo/", "--parent-window=0"], {
     env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port) },
     stdio: ["pipe", "pipe", "pipe"],
   });

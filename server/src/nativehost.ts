@@ -14,10 +14,10 @@ import { VERSION } from "./version.ts";
 // Chrome passes the caller origin (and on Windows --parent-window=N) as arguments; they are ignored.
 //
 // The host runs with the user's rights, so every request is validated strictly before acting.
-// Installed layout: <appDir>\host.cmd -> node.exe host.js, helper.js next to it (see config.ts).
+// Installed layout: <appDir>\host.cmd -> node.exe host.cjs, helper.js next to it (see config.ts).
 //
 // Keep this file light: Node built-ins + config.ts only (no MCP SDK, no unpdf). It is bundled to
-// a single CommonJS release/app/host.js by scripts/build-host.mjs.
+// a single CommonJS release/app/host.cjs by scripts/build-host.mjs.
 
 /** Chrome allows up to 4 GB towards the host; real requests are tiny. */
 export const MAX_MESSAGE_BYTES = 64 * 1024;
@@ -143,7 +143,7 @@ export function parseRequest(body: Buffer | string): NativeRequest | { error: st
 
 // ---------------------------------------------------------------- helper process control
 
-/** Folder of the running host script (host.js in an install, server/src in dev). helper.js lives next to it. */
+/** Folder of the running host script (host.cjs in an install, server/src in dev). helper.js lives next to it. */
 const hostDir = () => dirname(resolve(process.argv[1] ?? "."));
 const helperScript = () => join(hostDir(), "helper.js");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -304,7 +304,7 @@ function write(frame: Buffer): Promise<void> {
 function main() {
   const flag = process.argv.indexOf("--print-manifest");
   if (flag !== -1) {
-    // `node host.js --print-manifest [C:\path\to\host.cmd]` (installer / docs helper).
+    // `node host.cjs --print-manifest [C:\path\to\host.cmd]` (installer / docs helper).
     process.stdout.write(`${JSON.stringify(hostManifest(process.argv[flag + 1]), null, 2)}\n`);
     return;
   }
@@ -323,5 +323,5 @@ function main() {
   process.stdin.on("end", () => void queue.then(() => process.exit(0)));
 }
 
-// Runs as the bundled host.js or as `node server/src/nativehost.ts`; importing it (tests) does nothing.
-if (/^(?:host\.js|nativehost\.ts)$/.test(basename(process.argv[1] ?? ""))) main();
+// Runs as the bundled host.cjs or as `node server/src/nativehost.ts`; importing it (tests) does nothing.
+if (/^(?:host\.cjs|nativehost\.ts)$/.test(basename(process.argv[1] ?? ""))) main();

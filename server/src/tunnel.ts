@@ -1,131 +1,193 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { TUNNEL_PROVIDERS, type TunnelProviderName, type TunnelStatus } from "../../shared/helper.ts";
+import { cloudflaredProvider } from "./tunnel/cloudflared.ts";
+import type { ProviderEvent, ProviderSession, TunnelProvider } from "./tunnel/provider.ts";
+import { localhostRunProvider, pinggyProvider } from "./tunnel/ssh.ts";
+import { tunnelmoleProvider } from "./tunnel/tunnelmole.ts";
 
-// Cloudflare quick tunnel: `cloudflared tunnel --url http://127.0.0.1:PORT` needs no account and
-// prints a random https://<words>.trycloudflare.com URL on stderr. The URL changes on every start.
-// api.trycloudflare.com is the endpoint cloudflared asks for a tunnel; it shows up in the
-// "failed to request quick Tunnel" error and must never be taken for the tunnel URL.
+// Public tunnel to the remote MCP endpoint, so web AIs can reach this PC. No account anywhere.
+// Providers are tried in TUNNEL_PROVIDERS order; one that is not ready within readyTimeoutMs
+// falls through to the next. When every provider failed the state is "error" and the round is
+// retried with backoff. When a ready tunnel drops, a new round starts from the first provider
+// (the network may have changed). The public URL can change on every (re)connect.
 
-const URL_RE = /https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/i;
+export { BLOCKED_HINT, parseTunnelUrl, tunnelLogParser, type TunnelEvent } from "./tunnel/cloudflared.ts";
+export type { ProviderEvent, ProviderSession, TunnelProvider } from "./tunnel/provider.ts";
 
-export function parseTunnelUrl(output: string): string | null {
-  return URL_RE.exec(output)?.[0] ?? null;
+export interface TunnelOptions {
+  /** Fires on every status change: connecting (incl. after a drop), ready (incl. a new URL), error. */
+  onStatus?: (status: TunnelStatus) => void;
+  /** Defaults to defaultProviders(): one per TUNNEL_PROVIDERS entry. Tests inject fakes. */
+  providers?: TunnelProvider[];
+  /** A provider that isn't ready this long after starting is abandoned for the next one. */
+  readyTimeoutMs?: number;
+  /** Wait after a round where every provider failed; doubles up to maxRetryDelayMs. */
+  retryDelayMs?: number;
+  maxRetryDelayMs?: number;
+  /** Wait before reconnecting after a ready tunnel dropped. */
+  dropDelayMs?: number;
+  /** Folder for ssh's known_hosts and helper files. */
+  stateDir?: string;
+  log?: (line: string) => void;
 }
-
-// cloudflared prints the quick-tunnel URL as soon as it is assigned, before any edge connection
-// exists. On networks that block outbound port 7844 (TCP and/or QUIC) it never connects, and the
-// URL only ever answers Cloudflare error 1033. So the URL is announced only once cloudflared logs
-// "Registered tunnel connection", and its ERR lines are surfaced so the user can see why.
-
-export type TunnelEvent = { type: "url"; url: string } | { type: "ready"; url: string } | { type: "error"; message: string };
-
-/** Line-based parser for cloudflared's log output. Feed it raw chunks; it returns what happened. */
-export function tunnelLogParser() {
-  let partial = "";
-  let url: string | null = null;
-  let ready = false;
-  return (chunk: string): TunnelEvent[] => {
-    const lines = (partial + chunk).split(/\r?\n/);
-    partial = lines.pop() ?? "";
-    if (partial.length > 4096) partial = partial.slice(-4096);
-    const events: TunnelEvent[] = [];
-    for (const line of lines) {
-      const found = url ? null : parseTunnelUrl(line);
-      if (found) {
-        url = found;
-        events.push({ type: "url", url });
-      }
-      if (url && !ready && /Registered tunnel connection/i.test(line)) {
-        ready = true;
-        events.push({ type: "ready", url });
-      }
-      const err = /\sERR\s+(.*)$/.exec(line);
-      if (err) events.push({ type: "error", message: err[1]!.replace(/\s+(connIndex|event|ip)=\S+/g, "").trim() });
-    }
-    return events;
-  };
-}
-
-export const BLOCKED_HINT = `[tunnel] cloudflared has not connected to Cloudflare yet. If this persists, this network probably
-  blocks outbound port 7844 (TCP and UDP/QUIC), common on campus/corporate Wi-Fi. Try another network
-  (e.g. a phone hotspot). The connector URL is published only once the tunnel is reachable.`;
-
-export const INSTALL_HINT = `cloudflared is not installed (it lets ChatGPT / Gemini / claude.ai reach this PC).
-  Windows:  winget install --id Cloudflare.cloudflared   (then open a new terminal)
-  macOS:    brew install cloudflared
-  Linux:    https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-Or set CLOUDFLARED to the full path of the cloudflared executable.`;
 
 export interface Tunnel {
   stop(): void;
+  status(): TunnelStatus;
 }
 
 /**
- * Starts cloudflared and keeps it running (restarts with backoff when it exits).
- * `onUrl` fires with each new public URL, `onDown` when the tunnel process dies.
+ * One provider per TUNNEL_PROVIDERS entry. Dev/test overrides: UNIOVI_TUNNEL_PROVIDERS (comma list,
+ * e.g. "pinggy" or "tunnelmole,localhost.run") picks and orders them; UNIOVI_TUNNELMOLE_ENDPOINT
+ * points tunnelmole elsewhere (an unreachable one demonstrates the fallback).
  */
-export function startTunnel(localUrl: string, onUrl: (url: string) => void, onDown: () => void = () => {}): Tunnel {
-  const bin = process.env.CLOUDFLARED || "cloudflared";
-  let child: ChildProcess | null = null;
-  let stopped = false;
-  let delay = 2000;
+export function defaultProviders(opts: { stateDir?: string; env?: NodeJS.ProcessEnv } = {}): TunnelProvider[] {
+  const env = opts.env ?? process.env;
+  const stateDir = opts.stateDir ?? join(tmpdir(), "uniovi-virtual-tunnel");
+  const make: Record<TunnelProviderName, () => TunnelProvider> = {
+    "localhost.run": () => localhostRunProvider({ stateDir, env }),
+    tunnelmole: () => tunnelmoleProvider(env.UNIOVI_TUNNELMOLE_ENDPOINT || undefined),
+    pinggy: () => pinggyProvider({ stateDir, env }),
+    cloudflared: () => cloudflaredProvider(env),
+  };
+  const wanted = env.UNIOVI_TUNNEL_PROVIDERS?.split(",").map((s) => s.trim()) ?? [];
+  const names = wanted.length ? wanted.filter((n): n is TunnelProviderName => (TUNNEL_PROVIDERS as readonly string[]).includes(n)) : TUNNEL_PROVIDERS;
+  return names.map((name) => make[name]());
+}
 
-  const run = () => {
+export function startTunnel(localUrl: string, opts: TunnelOptions = {}): Tunnel {
+  const providers = opts.providers ?? defaultProviders(opts);
+  const readyTimeoutMs = opts.readyTimeoutMs ?? 25_000;
+  const baseRetry = opts.retryDelayMs ?? 10_000;
+  const maxRetry = opts.maxRetryDelayMs ?? 120_000;
+  const dropDelayMs = opts.dropDelayMs ?? 2_000;
+  const log = opts.log ?? ((line: string) => console.error(line));
+
+  let status: TunnelStatus = { state: "off", since: nowSeconds() };
+  let stopped = false;
+  let generation = 0; // bumps whenever the current session is abandoned; stale events are ignored
+  let session: ProviderSession | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let retryDelay = baseRetry;
+  let roundErrors: string[] = [];
+
+  const setStatus = (next: Omit<TunnelStatus, "since">) => {
+    const same = next.state === status.state && next.provider === status.provider && next.url === status.url && next.error === status.error;
+    if (same) return;
+    status = { ...next, since: nowSeconds() };
+    opts.onStatus?.(status);
+  };
+
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  const schedule = (ms: number, fn: () => void) => {
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      fn();
+    }, ms);
+  };
+
+  const endSession = () => {
+    generation++;
+    clearTimer();
+    const s = session;
+    session = null;
+    s?.stop();
+  };
+
+  const attempt = (i: number) => {
     if (stopped) return;
-    const started = Date.now();
-    let missing = false;
-    child = spawn(bin, ["tunnel", "--no-autoupdate", "--url", localUrl], {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    const parse = tunnelLogParser();
-    const seenErrors = new Set<string>();
-    let connected = false;
-    const slow = setTimeout(() => {
-      if (!connected && !stopped) console.error(BLOCKED_HINT);
-    }, 45_000);
-    const scan = (chunk: Buffer) => {
-      for (const ev of parse(chunk.toString("utf8"))) {
-        if (ev.type === "url") console.error(`[tunnel] got ${ev.url}, waiting for cloudflared to connect...`);
-        else if (ev.type === "ready") {
-          connected = true;
-          clearTimeout(slow);
-          onUrl(ev.url);
-        } else {
-          // One line per kind of error: the same failure repeats for every edge IP it retries.
-          const kind = ev.message.replace(/\d{1,3}(\.\d{1,3}){3}(:\d+)?/g, "<ip>");
-          if (seenErrors.has(kind) || seenErrors.size >= 20) continue;
-          seenErrors.add(kind);
-          console.error(`[tunnel] cloudflared: ${ev.message}`);
-        }
+    if (i === 0) roundErrors = [];
+    if (i >= providers.length) {
+      const error = roundErrors.length ? roundErrors.join(" | ") : "no tunnel provider available";
+      log(`[tunnel] no provider connected (${error}); retrying in ${Math.round(retryDelay / 1000)}s`);
+      setStatus({ state: "error", error });
+      schedule(retryDelay, () => attempt(0));
+      retryDelay = Math.min(retryDelay * 2, maxRetry);
+      return;
+    }
+    const p = providers[i]!;
+    let available = true;
+    try {
+      available = p.available?.() ?? true;
+    } catch {
+      available = false;
+    }
+    if (!available) return attempt(i + 1);
+
+    const gen = ++generation;
+    let ready = false;
+    let lastError: string | undefined;
+    const seen = new Set<string>();
+    setStatus({ state: "connecting", provider: p.name, error: status.error });
+    log(`[tunnel] trying ${p.name}...`);
+
+    const fail = (reason: string) => {
+      endSession();
+      const why = lastError && !reason.includes(lastError) ? `${reason}; ${lastError}` : reason;
+      log(`[tunnel] ${p.name} failed: ${why}`);
+      roundErrors.push(`${p.name}: ${why}`);
+      attempt(i + 1);
+    };
+
+    const onEvent = (ev: ProviderEvent) => {
+      if (stopped || gen !== generation) return;
+      if (ev.type === "url") {
+        log(`[tunnel] ${p.name} got ${ev.url}, waiting for it to connect...`);
+      } else if (ev.type === "ready") {
+        clearTimer();
+        ready = true;
+        retryDelay = baseRetry;
+        if (ev.url !== status.url) log(`[tunnel] ${p.name} ready: ${ev.url}`);
+        setStatus({ state: "ready", provider: p.name, url: ev.url });
+      } else if (ev.type === "error") {
+        lastError = ev.message;
+        if (seen.has(ev.message) || seen.size >= 20) return;
+        seen.add(ev.message);
+        log(`[tunnel] ${p.name}: ${ev.message}`);
+      } else if (!ready) {
+        fail(ev.reason);
+      } else {
+        endSession();
+        log(`[tunnel] ${p.name} dropped (${ev.reason}); reconnecting`);
+        setStatus({ state: "connecting", provider: p.name, error: `${p.name} dropped: ${ev.reason}` });
+        schedule(dropDelayMs, () => attempt(0));
       }
     };
-    child.stdout?.on("data", scan);
-    child.stderr?.on("data", scan);
-    child.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") {
-        missing = true;
-        console.error(INSTALL_HINT);
-      } else {
-        console.error("[tunnel]", err.message);
-      }
+
+    schedule(readyTimeoutMs, () => {
+      if (p.timeoutHint) log(`[tunnel] ${p.timeoutHint}`);
+      fail(`not ready after ${readyTimeoutMs / 1000}s`);
     });
-    child.on("exit", (code) => {
-      clearTimeout(slow);
-      child = null;
-      if (stopped || missing) return;
-      onDown();
-      if (Date.now() - started > 60_000) delay = 2000;
-      console.error(`[tunnel] cloudflared exited (${code}); restarting in ${delay / 1000}s`);
-      setTimeout(run, delay);
-      delay = Math.min(delay * 2, 60_000);
-    });
+    let started: ProviderSession;
+    try {
+      started = p.start(localUrl, onEvent);
+    } catch (err) {
+      if (gen === generation) fail(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    // The provider may have failed synchronously inside start(); then this session is already stale.
+    if (gen === generation && !stopped) session = started;
+    else started.stop();
   };
-  run();
+
+  attempt(0);
 
   return {
     stop() {
+      if (stopped) return;
       stopped = true;
-      child?.kill();
+      endSession();
+      setStatus({ state: "off" });
     },
+    status: () => status,
   };
+}
+
+function nowSeconds() {
+  return Math.floor(Date.now() / 1000);
 }

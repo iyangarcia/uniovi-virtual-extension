@@ -9,7 +9,7 @@ import { startTunnel } from "./tunnel.ts";
 // Three modes, one process:
 //   default      MCP over stdio (spawned by Claude Code / Claude Desktop) + HTTP ingest if the port is free
 //   --http-only  just the HTTP ingest bridge, for syncing while Claude is not running
-//   --remote     HTTP ingest + MCP over Streamable HTTP at /mcp/<token> + a Cloudflare quick tunnel,
+//   --remote     HTTP ingest + MCP over Streamable HTTP at /mcp/<token> + a public tunnel (tunnel.ts),
 //                so web chat AIs (ChatGPT, Gemini, claude.ai) can use it as a custom connector.
 //                --rotate-token makes a new secret URL (the old one stops working).
 // stdout is the MCP channel in the default mode: log to stderr only.
@@ -46,10 +46,18 @@ async function runRemote() {
   // Drop a URL left behind by a previous run that was killed hard (its pid may be reused).
   await publish(undefined);
 
-  const tunnel = startTunnel(
-    `http://127.0.0.1:${REMOTE_PORT}`,
-    (base) => {
-      const url = `${base}/mcp/${token}`;
+  let shown: string | undefined;
+  const tunnel = startTunnel(`http://127.0.0.1:${REMOTE_PORT}`, {
+    onStatus: (status) => {
+      if (status.state !== "ready" || !status.url) {
+        // Dropped or still trying: unpublish so the popup doesn't offer a dead URL.
+        if (shown !== undefined) void publish(undefined);
+        shown = undefined;
+        return;
+      }
+      if (status.url === shown) return;
+      shown = status.url;
+      const url = `${status.url}/mcp/${token}`;
       void publish(url);
       console.error(
         [
@@ -60,15 +68,15 @@ async function runRemote() {
           "",
           ` ${url}`,
           "",
-          " It is also shown in the extension popup. It changes every time",
-          " this window is restarted. Close this window to disconnect.",
+          " It is also shown in the extension popup. It changes when the",
+          " tunnel reconnects (a new box is printed here). Close this window",
+          " to disconnect.",
           "==================================================================",
           "",
         ].join("\n"),
       );
     },
-    () => void publish(undefined),
-  );
+  });
 
   const shutdown = () => {
     tunnel.stop();

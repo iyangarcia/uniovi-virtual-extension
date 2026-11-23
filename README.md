@@ -9,9 +9,15 @@ A Chrome extension for **Uniovi Virtual** (Moodle). It does three things:
    - `preparar_examen <asignatura>`: exam details from the announcements, a study plan, condensed notes and practice questions, citing slides and pages
    - `estudiar_tema <asignatura> <tema>`: summary, key concepts, flashcards and a mini quiz
 
-Nothing runs in the background. The extension syncs when you open the campus, if the last sync is older than 6 hours, using your normal login. 1 and 2 don't need Claude at all. Data for Claude is kept until Claude is open and then handed over automatically.
+The extension syncs when you open the campus, if the last sync is older than 6 hours, using your normal login. 1 and 2 don't need Claude or anything else installed.
 
-## Setup
+## For students: use it from claude.ai, ChatGPT or Gemini (Windows)
+
+Run **`UnioviVirtual-Setup-<version>.exe`** (per user, no admin; SmartScreen: *Más información → Ejecutar de todas formas*). It installs the extension folder and a small hidden helper that starts with Windows, keeps your files on your PC, and opens a public tunnel so a web AI can read them through a secret connector URL. Load the extension from `%LOCALAPPDATA%\UnioviVirtual\extension`, sync once, then copy the URL from the extension popup into your AI as a custom connector.
+
+Step-by-step guide in Spanish, including privacy and what to do when the URL changes: **[docs/USO-CON-IA-WEB.md](docs/USO-CON-IA-WEB.md)**.
+
+## Developer setup
 
 ```sh
 npm install
@@ -27,3 +33,7 @@ npm run build
    ```
 
 Data lives in `~/uniovi-data` (override with `UNIOVI_DATA_DIR`). To pin the bridge to your extension's ID, set `UNIOVI_EXTENSION_ID`.
+
+Web AIs without the installer: `npm run remote` (or `start-remote.bat`) runs the bridge, the remote MCP endpoint and a tunnel (localhost.run → tunnelmole → pinggy → cloudflared if installed) until you close it.
+
+**Building the installer:** `npm run package` (Windows, Inno Setup 6: `winget install --id JRSoftware.InnoSetup -e --scope user`) builds everything, downloads and verifies a portable `node.exe`, and writes `release/UnioviVirtual-Setup-<version>.exe`. Manual test checklist: [docs/PRUEBAS-MANUALES.md](docs/PRUEBAS-MANUALES.md).

@@ -308,6 +308,17 @@ function main() {
     process.stdout.write(`${JSON.stringify(hostManifest(process.argv[flag + 1]), null, 2)}\n`);
     return;
   }
+  if (process.argv.includes("--stop")) {
+    // `node host.cjs --stop` (installer before an upgrade, uninstaller): same logic as the popup's Detener.
+    stop().then(
+      () => process.exit(0),
+      (err: unknown) => {
+        console.error("[host] --stop failed:", err);
+        process.exit(1);
+      },
+    );
+    return;
+  }
 
   // Requests are answered strictly in order.
   let queue: Promise<void> = Promise.resolve();

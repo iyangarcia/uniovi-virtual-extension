@@ -14,7 +14,8 @@
     "serve": "node server/dist/index.js --http-only",
     "mcp": "node server/dist/index.js",
     "remote": "node server/dist/index.js --remote",
-    "package:host": "node scripts/build-host.mjs"
+    "package:host": "node scripts/build-host.mjs",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

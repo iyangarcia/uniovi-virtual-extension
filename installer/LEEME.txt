@@ -1,0 +1,24 @@
+﻿Uniovi Virtual: últimos pasos
+=============================
+
+Ya está instalado el asistente. Se inicia solo, sin ventanas, cada vez que entras en Windows.
+Falta cargar la extensión en Chrome (una sola vez):
+
+1. Abre Chrome y escribe en la barra de direcciones:  chrome://extensions
+2. Activa "Modo de desarrollador" (arriba a la derecha).
+3. Pulsa "Cargar descomprimida" y elige esta carpeta:
+       %LOCALAPPDATA%\UnioviVirtual\extension
+   (al terminar el instalador puedes marcar "Abrir la carpeta de la extensión").
+4. Fija la extensión (icono del puzle) y entra en Uniovi Virtual con tu usuario de siempre.
+   La primera sincronización tarda unos segundos.
+5. Abre la ventanita de la extensión. Cuando ponga "Listo", pulsa "Copiar URL del conector"
+   y pégala como conector personalizado en claude.ai, ChatGPT o Gemini.
+
+Si la URL cambia (te llegará un aviso), copia la nueva y edita el conector en tu IA.
+
+Tus archivos se quedan en tu PC (carpeta de datos: la ves en la ventanita de la extensión).
+La URL del conector es como una contraseña: no la compartas.
+
+Guía completa: docs/USO-CON-IA-WEB.md del proyecto.
+Para desinstalar: Configuración de Windows > Aplicaciones > Uniovi Virtual > Desinstalar.
+La carpeta de datos no se borra al desinstalar.

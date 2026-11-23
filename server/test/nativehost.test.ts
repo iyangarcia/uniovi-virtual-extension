@@ -201,6 +201,26 @@ test("host over stdio: status, start → /api/status answers, setTunnel restarts
   assert.equal(await exited, 0);
 });
 
+test("host --stop (installer / uninstaller): stops a running helper, then is a no-op", { timeout: 30_000 }, async () => {
+  const { child, ask } = startHost();
+  const pid = okStatus(await ask({ type: "start" })).pid!;
+  spawned.add(pid);
+  child.stdin!.end();
+
+  const runStop = () =>
+    new Promise<number | null>((resolve) => {
+      const c = spawn(process.execPath, [join(installDir, "host.cjs"), "--stop"], {
+        env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port) },
+        stdio: "ignore",
+      });
+      c.on("exit", resolve);
+    });
+  assert.equal(await runStop(), 0);
+  assert.equal(alive(pid), false);
+  assert.equal(existsSync(join(appDir, "helper.pid")), false);
+  assert.equal(await runStop(), 0);
+});
+
 test("host over stdio: setDataDir while stopped, stale pid file, oversized message", { timeout: 30_000 }, async () => {
   const { child, ask, askRaw } = startHost();
   const exited = new Promise<number | null>((r) => child.on("exit", r));

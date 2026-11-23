@@ -69,8 +69,14 @@ const courseArg = z
   .optional()
   .describe("Course id, short name, or part of the course name (accent-insensitive). Omit for all courses.");
 
-export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: "uniovi-virtual", version: VERSION });
+export interface McpOptions {
+  /** Served to a web client (ChatGPT, Gemini, claude.ai) over a tunnel: hide local paths, which are useless there and reveal the user's folders. */
+  remote?: boolean;
+}
+
+export function createMcpServer({ remote = false }: McpOptions = {}): McpServer {
+  const server = new McpServer({ name: "uniovi-virtual", version: VERSION }, { instructions: INSTRUCTIONS });
+  const local = <T>(v: T): T | undefined => (remote ? undefined : v);
 
   server.registerTool(
     "sync_status",
@@ -89,7 +95,7 @@ export function createMcpServer(): McpServer {
         ageHours,
         stale: ageHours > 24 ? "Data is over a day old; ask the user to sync from the browser extension." : undefined,
         site: s.siteUrl,
-        dataDir,
+        dataDir: local(dataDir),
         counts: {
           courses: s.courses.length,
           materials: s.resources.length,
@@ -150,7 +156,7 @@ export function createMcpServer(): McpServer {
             filename: r.filename ?? stored?.resource.filename,
             type: r.modname === "url" ? "link" : r.mimetype ?? stored?.contentType,
             modified: r.timemodified ? when(r.timemodified) : undefined,
-            localPath: stored ? absolutePath(stored) : undefined,
+            localPath: stored ? local(absolutePath(stored)) : undefined,
             url: r.url,
           };
         });
@@ -173,26 +179,9 @@ export function createMcpServer(): McpServer {
         maxChars: z.number().int().min(1000).max(200_000).optional().describe("Max characters to return (default 40000)."),
       },
     },
-    wrap(async ({ key, offset = 0, maxChars = 40_000 }: { key: string; offset?: number; maxChars?: number }) => {
-      const index = await loadIndex();
-      const f = index[key];
-      if (!f) {
-        throw new UserError(
-          `Material ${key} is not downloaded (it may be a link, too large, or not synced yet). Check list_materials for its url.`,
-        );
-      }
-      const text = await textOf(f);
-      if (text === null) {
-        return ok({
-          note: `Text extraction not supported for this file type (${f.contentType}). Open it directly from localPath.`,
-          localPath: absolutePath(f),
-        });
-      }
-      const slice = text.slice(offset, offset + maxChars);
-      const next = offset + slice.length < text.length ? offset + slice.length : undefined;
-      const header = `# ${f.resource.name} — ${f.resource.filename}\nlocalPath: ${absolutePath(f)}\nchars ${offset}-${offset + slice.length} of ${text.length}${next !== undefined ? ` (nextOffset: ${next})` : ""}\n\n`;
-      return ok(header + slice);
-    }),
+    wrap(async ({ key, offset = 0, maxChars = 40_000 }: { key: string; offset?: number; maxChars?: number }) =>
+      ok(await materialText(key, offset, maxChars, remote)),
+    ),
   );
 
   server.registerTool(
@@ -209,36 +198,8 @@ export function createMcpServer(): McpServer {
     },
     wrap(async ({ query, course, limit = 30 }: { query: string; course?: string; limit?: number }) => {
       const s = await requireSnapshot();
-      const ids = new Set(matchCourses(s, course).map((c) => c.id));
-      const files = Object.values(await loadIndex()).filter(
-        (f: StoredFile) => ids.has(f.resource.courseId) && kindOf(f) !== "other",
-      );
-      const terms = fold(query).split(/\s+/).filter(Boolean);
-      const results: Array<{ key: string; file: string; location: string; snippet: string }> = [];
-      for (const f of files) {
-        const text = await textOf(f).catch(() => null);
-        if (!text) continue;
-        let location = "";
-        const lines = text.split("\n");
-        for (let i = 0; i < lines.length && results.length < limit; i++) {
-          const marker = /^--- (page|slide) (\d+) ---$/.exec(lines[i]!);
-          if (marker) {
-            location = `${marker[1]} ${marker[2]}`;
-            continue;
-          }
-          const windowText = fold(lines.slice(i, i + 3).join(" "));
-          if (terms.every((t) => windowText.includes(t)) && terms.some((t) => fold(lines[i]!).includes(t))) {
-            results.push({
-              key: f.key,
-              file: `${f.resource.name} (${f.resource.filename})`,
-              location,
-              snippet: lines.slice(Math.max(0, i - 1), i + 3).join(" ").replace(/\s+/g, " ").slice(0, 400),
-            });
-          }
-        }
-        if (results.length >= limit) break;
-      }
-      return ok(results.length ? results : `No matches for "${query}" in ${files.length} downloaded files.`);
+      const { results, scanned } = await searchMaterials(s, query, course, limit);
+      return ok(results.length ? results : `No matches for "${query}" in ${scanned} downloaded files.`);
     }),
   );
 
@@ -387,21 +348,176 @@ export function createMcpServer(): McpServer {
       description: "Full text of a forum post plus the rest of its discussion thread.",
       inputSchema: { id: z.number().int().describe("Post id from search_forums.") },
     },
-    wrap(async ({ id }: { id: number }) => {
-      const s = await requireSnapshot();
-      const post = s.posts.find((p) => p.id === id);
-      if (!post) throw new UserError(`No post with id ${id}.`);
-      const thread = s.posts
-        .filter((p) => p.discussionId === post.discussionId)
-        .sort((a, b) => a.created - b.created)
-        .map((p) => `## ${p.subject}\n${p.author} · ${when(p.created)}${p.id === id ? "  ← requested" : ""}\n\n${p.message}`);
-      return ok(`Course: ${s.courses.find((c) => c.id === post.courseId)?.fullname}\nForum: ${post.forumName}\n${post.url}\n\n${thread.join("\n\n---\n\n")}`);
-    }),
+    wrap(async ({ id }: { id: number }) => ok(threadText(await requireSnapshot(), id))),
   );
 
+  registerSearchFetch(server);
   registerStudyPrompts(server);
   return server;
 }
+
+// ---------------------------------------------------------------- shared tool logic
+
+async function materialText(key: string, offset: number, maxChars: number, remote: boolean): Promise<string | object> {
+  const index = await loadIndex();
+  const f = index[key];
+  if (!f) {
+    throw new UserError(
+      `Material ${key} is not downloaded (it may be a link, too large, or not synced yet). Check list_materials for its url.`,
+    );
+  }
+  const text = await textOf(f);
+  if (text === null) {
+    return remote
+      ? { note: `Text extraction not supported for this file type (${f.contentType}).`, url: f.resource.url }
+      : { note: `Text extraction not supported for this file type (${f.contentType}). Open it directly from localPath.`, localPath: absolutePath(f) };
+  }
+  const slice = text.slice(offset, offset + maxChars);
+  const next = offset + slice.length < text.length ? offset + slice.length : undefined;
+  const where = remote ? `url: ${f.resource.url}` : `localPath: ${absolutePath(f)}`;
+  return `# ${f.resource.name} — ${f.resource.filename}\n${where}\nchars ${offset}-${offset + slice.length} of ${text.length}${next !== undefined ? ` (nextOffset: ${next})` : ""}\n\n${slice}`;
+}
+
+export interface MaterialHit {
+  key: string;
+  file: string;
+  location: string;
+  snippet: string;
+}
+
+export async function searchMaterials(s: Snapshot, query: string, course: string | undefined, limit: number) {
+  const ids = new Set(matchCourses(s, course).map((c) => c.id));
+  const files = Object.values(await loadIndex()).filter(
+    (f: StoredFile) => ids.has(f.resource.courseId) && kindOf(f) !== "other",
+  );
+  const terms = fold(query).split(/\s+/).filter(Boolean);
+  const results: MaterialHit[] = [];
+  for (const f of files) {
+    const text = await textOf(f).catch(() => null);
+    if (!text) continue;
+    let location = "";
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length && results.length < limit; i++) {
+      const marker = /^--- (page|slide) (\d+) ---$/.exec(lines[i]!);
+      if (marker) {
+        location = `${marker[1]} ${marker[2]}`;
+        continue;
+      }
+      const windowText = fold(lines.slice(i, i + 3).join(" "));
+      if (terms.every((t) => windowText.includes(t)) && terms.some((t) => fold(lines[i]!).includes(t))) {
+        results.push({
+          key: f.key,
+          file: `${f.resource.name} (${f.resource.filename})`,
+          location,
+          snippet: lines.slice(Math.max(0, i - 1), i + 3).join(" ").replace(/\s+/g, " ").slice(0, 400),
+        });
+      }
+    }
+    if (results.length >= limit) break;
+  }
+  return { results, scanned: files.length };
+}
+
+function threadText(s: Snapshot, id: number): string {
+  const post = s.posts.find((p) => p.id === id);
+  if (!post) throw new UserError(`No post with id ${id}.`);
+  const thread = s.posts
+    .filter((p) => p.discussionId === post.discussionId)
+    .sort((a, b) => a.created - b.created)
+    .map((p) => `## ${p.subject}\n${p.author} · ${when(p.created)}${p.id === id ? "  ← requested" : ""}\n\n${p.message}`);
+  return `Course: ${s.courses.find((c) => c.id === post.courseId)?.fullname}\nForum: ${post.forumName}\n${post.url}\n\n${thread.join("\n\n---\n\n")}`;
+}
+
+// ---------------------------------------------------------------- search / fetch
+// ChatGPT's connector convention (also used by deep research): `search` returns
+// {results: [{id, title, url}]}, `fetch` takes one of those ids and returns {id, title, text, url, metadata}.
+// Ids are "material:<key>" (one per file, best hit first) and "post:<id>".
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  url: string;
+  text?: string;
+}
+
+const FETCH_CHARS = 60_000;
+
+export async function searchAll(s: Snapshot, query: string, limit = 20): Promise<SearchResult[]> {
+  const out: SearchResult[] = [];
+  const { results } = await searchMaterials(s, query, undefined, limit * 3);
+  const seen = new Set<string>();
+  for (const h of results) {
+    if (seen.has(h.key)) continue;
+    seen.add(h.key);
+    const r = s.resources.find((x) => x.key === h.key);
+    out.push({ id: `material:${h.key}`, title: `${h.file}${h.location ? `, ${h.location}` : ""}`, url: r?.url ?? "", text: h.snippet });
+  }
+  const terms = fold(query).split(/\s+/).filter(Boolean);
+  const posts = s.posts
+    .filter((p) => terms.every((t) => fold(`${p.subject} ${p.message}`).includes(t)))
+    .sort((a, b) => b.created - a.created);
+  for (const p of posts) {
+    out.push({ id: `post:${p.id}`, title: `${p.subject} (${p.forumName}, ${when(p.created)})`, url: p.url, text: p.message.slice(0, 300) });
+  }
+  return out.slice(0, limit);
+}
+
+export async function fetchById(s: Snapshot, id: string) {
+  const [kind, ...rest] = id.split(":");
+  const ref = rest.join(":");
+  if (kind === "post") {
+    const post = s.posts.find((p) => String(p.id) === ref);
+    if (!post) throw new UserError(`No post with id ${ref}.`);
+    return { id, title: post.subject, text: threadText(s, post.id), url: post.url, metadata: { course: s.courses.find((c) => c.id === post.courseId)?.shortname, forum: post.forumName } };
+  }
+  if (kind === "material") {
+    const r = s.resources.find((x) => x.key === ref);
+    const body = await materialText(ref, 0, FETCH_CHARS, true);
+    const text = typeof body === "string" ? body : JSON.stringify(body);
+    return { id, title: r?.name ?? ref, text, url: r?.url ?? "", metadata: { course: s.courses.find((c) => c.id === r?.courseId)?.shortname, section: r?.section, note: "Use read_material with nextOffset for the rest of long files." } };
+  }
+  throw new UserError(`Unknown id "${id}". Use ids returned by search.`);
+}
+
+function registerSearchFetch(server: McpServer) {
+  server.registerTool(
+    "search",
+    {
+      title: "Search everything",
+      description:
+        "Searches the student's Uniovi course materials (text of PDFs/slides/documents) and forum posts. Returns {results:[{id,title,url}]}; pass an id to fetch for the full text.",
+      inputSchema: { query: z.string().min(2).describe("Words to search for (accent-insensitive).") },
+      annotations: { readOnlyHint: true },
+    },
+    wrap(async ({ query }: { query: string }) => {
+      const results = await searchAll(await requireSnapshot(), query);
+      return ok({ results: results.map(({ id, title, url }) => ({ id, title, url })) });
+    }),
+  );
+
+  server.registerTool(
+    "fetch",
+    {
+      title: "Fetch a search result",
+      description: "Full text of a material or forum thread returned by search, as {id,title,text,url,metadata}.",
+      inputSchema: { id: z.string().describe("An id from search, e.g. 'material:...' or 'post:123'.") },
+      annotations: { readOnlyHint: true },
+    },
+    wrap(async ({ id }: { id: string }) => ok(await fetchById(await requireSnapshot(), id))),
+  );
+}
+
+// Web clients (ChatGPT, Gemini) don't show MCP prompts, so the same guidance goes in the server instructions.
+const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, course materials (slides, PDFs, notes, with extracted text), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
+
+How to use it well:
+- Start with sync_status if results look empty or stale; data is as fresh as the student's last sync.
+- "What do I have this week?": get_deadlines (daysAhead 14) + get_exam_dates (includeDeadlines true) merged chronologically, then search_forums (sinceDays 7) for new announcements, then a prioritised 7-day plan.
+- Preparing an exam: get_exam_dates for the course, search_forums with query "examen" and get_forum_post to learn format and covered topics, then list_materials and read_material (follow nextOffset) for those topics; produce a study plan, condensed notes and practice questions.
+- Studying a topic: list_materials with the topic as query (or search_materials to find where it is covered), read_material, then summary, key concepts, flashcards and a short quiz.
+- search/fetch search materials and forum posts together.
+
+Rules: work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;
 
 // ---------------------------------------------------------------- study prompts
 // Ready-made workflows, shown by Claude Code / Claude Desktop as slash commands, so the

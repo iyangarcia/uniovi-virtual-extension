@@ -125,3 +125,37 @@ export async function readCache(f: StoredFile): Promise<string | null> {
 export async function writeCache(f: StoredFile, text: string) {
   await writeAtomic(cachePathFor(f), text);
 }
+
+// ---------------------------------------------------------------- remote connector state
+// remote.json holds the secret token of the public MCP URL and, while `--remote` runs, the
+// current tunnel URL, so /api/status can show it in the popup even from another process.
+
+export interface RemoteState {
+  token: string;
+  /** Full connector URL (https://….trycloudflare.com/mcp/<token>) while a tunnel is up. */
+  publicUrl?: string;
+  /** pid of the `--remote` process that owns publicUrl. */
+  pid?: number;
+}
+
+const remotePath = join(dataDir, "remote.json");
+
+export function loadRemoteState(): Promise<RemoteState | null> {
+  return readJson<RemoteState | null>(remotePath, null);
+}
+
+export async function saveRemoteState(s: RemoteState) {
+  await writeAtomic(remotePath, JSON.stringify(s, null, 1));
+}
+
+/** The connector URL, if the process that published it is still alive. */
+export async function liveRemoteUrl(): Promise<string | undefined> {
+  const s = await loadRemoteState();
+  if (!s?.publicUrl || !s.pid) return undefined;
+  try {
+    process.kill(s.pid, 0);
+    return s.publicUrl;
+  } catch {
+    return undefined;
+  }
+}

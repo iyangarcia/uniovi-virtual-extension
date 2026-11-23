@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Resource, Snapshot } from "../../shared/types.ts";
@@ -26,11 +26,38 @@ export const dataDir = resolve(process.env.UNIOVI_DATA_DIR ?? join(homedir(), "u
 const snapshotPath = join(dataDir, "snapshot.json");
 const indexPath = join(dataDir, "files-index.json");
 
-async function writeAtomic(path: string, data: string | Uint8Array) {
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, data);
-  await rename(tmp, path);
+let tmpSeq = 0;
+const writeChains = new Map<string, Promise<unknown>>();
+
+// Concurrent writes of one file (e.g. the tunnel's onDown and the shutdown handler both clearing
+// remote.json) used to share one tmp name, so one of the renames failed with ENOENT. Writes to
+// the same path are now serialised in-process, tmp names are unique, and a rename that loses a
+// race with another process on Windows (EPERM/EACCES/EBUSY) is retried briefly.
+function writeAtomic(path: string, data: string | Uint8Array): Promise<void> {
+  const run = async () => {
+    await mkdir(dirname(path), { recursive: true });
+    const tmp = `${path}.${process.pid}.${++tmpSeq}.tmp`;
+    await writeFile(tmp, data);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await rename(tmp, path);
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code ?? "";
+        if (attempt >= 8 || !["EPERM", "EACCES", "EBUSY"].includes(code)) {
+          await unlink(tmp).catch(() => undefined);
+          throw err;
+        }
+        await new Promise((r) => setTimeout(r, 15 * (attempt + 1)));
+      }
+    }
+  };
+  const p = (writeChains.get(path) ?? Promise.resolve()).then(run, run);
+  const tail = p.catch(() => undefined);
+  writeChains.set(path, tail);
+  void tail.then(() => {
+    if (writeChains.get(path) === tail) writeChains.delete(path);
+  });
+  return p;
 }
 
 async function readJson<T>(path: string, fallback: T): Promise<T> {

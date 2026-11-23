@@ -1,8 +1,9 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startHttp } from "./http.ts";
+import { warmTextCache } from "./extract.ts";
 import { createMcpServer } from "./mcp.ts";
 import { REMOTE_PORT, remoteToken, startRemote } from "./remote.ts";
-import { loadRemoteState, saveRemoteState } from "./store.ts";
+import { loadIndex, loadRemoteState, saveRemoteState } from "./store.ts";
 import { startTunnel } from "./tunnel.ts";
 
 // Three modes, one process:
@@ -35,11 +36,15 @@ async function runRemote() {
   const token = await remoteToken(process.argv.includes("--rotate-token"));
   if (!(await startRemote(token))) process.exit(1);
   console.error(`[remote] MCP endpoint on http://127.0.0.1:${REMOTE_PORT}/mcp/<token>`);
+  // Web clients give up on a tool call after ~60 s; extracting a cold corpus takes longer, so index now.
+  void loadIndex().then((index) => warmTextCache(Object.values(index)));
 
   const publish = async (publicUrl?: string) => {
     const state = (await loadRemoteState()) ?? { token };
     await saveRemoteState({ ...state, token, publicUrl, pid: publicUrl ? process.pid : undefined });
   };
+  // Drop a URL left behind by a previous run that was killed hard (its pid may be reused).
+  await publish(undefined);
 
   const tunnel = startTunnel(
     `http://127.0.0.1:${REMOTE_PORT}`,
@@ -71,4 +76,6 @@ async function runRemote() {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // Closing the console window on Windows arrives as SIGHUP (the banner tells users to do exactly that).
+  process.on("SIGHUP", shutdown);
 }

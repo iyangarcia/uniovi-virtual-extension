@@ -63,18 +63,63 @@ export function kindOf(f: StoredFile): "pdf" | "pptx" | "docx" | "text" | "other
   return "other";
 }
 
+// One extraction per file at a time, shared by tool calls and the background warmer.
+const inFlight = new Map<string, Promise<string | null>>();
+
 /** Returns extracted text, or null when the format is not supported. Cached on disk. */
 export async function textOf(f: StoredFile): Promise<string | null> {
   const cached = await readCache(f);
   if (cached !== null) return cached;
   const kind = kindOf(f);
   if (kind === "other") return null;
-  const bytes = new Uint8Array(await readFile(absolutePath(f)));
-  const text =
-    kind === "pdf" ? await pdfText(bytes)
-    : kind === "pptx" ? pptxText(bytes)
-    : kind === "docx" ? docxText(bytes)
-    : new TextDecoder().decode(bytes);
-  await writeCache(f, text);
-  return text;
+  const id = `${f.key}|${f.timemodified}|${f.size}`;
+  let p = inFlight.get(id);
+  if (!p) {
+    p = (async () => {
+      const bytes = new Uint8Array(await readFile(absolutePath(f)));
+      const text =
+        kind === "pdf" ? await pdfText(bytes)
+        : kind === "pptx" ? pptxText(bytes)
+        : kind === "docx" ? docxText(bytes)
+        : new TextDecoder().decode(bytes);
+      await writeCache(f, text);
+      return text;
+    })().finally(() => inFlight.delete(id));
+    inFlight.set(id, p);
+  }
+  return p;
+}
+
+/** Cached text only (null if not extracted yet); never does the slow extraction. */
+export function cachedTextOf(f: StoredFile): Promise<string | null> {
+  return readCache(f);
+}
+
+let warming: Promise<void> | null = null;
+
+/** True while warmTextCache runs; searches then read the cache only instead of competing for the CPU. */
+export function isWarming(): boolean {
+  return warming !== null;
+}
+
+/**
+ * Extracts every downloaded file that isn't cached yet, one at a time, in the background.
+ * A cold corpus (~300 files) takes over a minute, longer than remote clients wait for one
+ * search call, so the server starts this at launch and searches use whatever is ready.
+ */
+export function warmTextCache(files: StoredFile[]): Promise<void> {
+  if (warming) return warming;
+  warming = (async () => {
+    const started = Date.now();
+    let done = 0;
+    for (const f of files) {
+      if (kindOf(f) === "other" || (await readCache(f)) !== null) continue;
+      await textOf(f).catch((err: Error) => console.error(`[extract] ${f.path}: ${err.message}`));
+      done++;
+    }
+    if (done) console.error(`[extract] indexed ${done} files in ${Math.round((Date.now() - started) / 1000)}s`);
+  })().finally(() => {
+    warming = null;
+  });
+  return warming;
 }

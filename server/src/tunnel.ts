@@ -9,6 +9,44 @@ export function parseTunnelUrl(output: string): string | null {
   return URL_RE.exec(output)?.[0] ?? null;
 }
 
+// cloudflared prints the quick-tunnel URL as soon as it is assigned, before any edge connection
+// exists. On networks that block outbound port 7844 (TCP and/or QUIC) it never connects, and the
+// URL only ever answers Cloudflare error 1033. So the URL is announced only once cloudflared logs
+// "Registered tunnel connection", and its ERR lines are surfaced so the user can see why.
+
+export type TunnelEvent = { type: "url"; url: string } | { type: "ready"; url: string } | { type: "error"; message: string };
+
+/** Line-based parser for cloudflared's log output. Feed it raw chunks; it returns what happened. */
+export function tunnelLogParser() {
+  let partial = "";
+  let url: string | null = null;
+  let ready = false;
+  return (chunk: string): TunnelEvent[] => {
+    const lines = (partial + chunk).split(/\r?\n/);
+    partial = lines.pop() ?? "";
+    if (partial.length > 4096) partial = partial.slice(-4096);
+    const events: TunnelEvent[] = [];
+    for (const line of lines) {
+      const found = url ? null : parseTunnelUrl(line);
+      if (found) {
+        url = found;
+        events.push({ type: "url", url });
+      }
+      if (url && !ready && /Registered tunnel connection/i.test(line)) {
+        ready = true;
+        events.push({ type: "ready", url });
+      }
+      const err = /\sERR\s+(.*)$/.exec(line);
+      if (err) events.push({ type: "error", message: err[1]!.replace(/\s+(connIndex|event|ip)=\S+/g, "").trim() });
+    }
+    return events;
+  };
+}
+
+export const BLOCKED_HINT = `[tunnel] cloudflared has not connected to Cloudflare yet. If this persists, this network probably
+  blocks outbound port 7844 (TCP and UDP/QUIC), common on campus/corporate Wi-Fi. Try another network
+  (e.g. a phone hotspot). The connector URL is published only once the tunnel is reachable.`;
+
 export const INSTALL_HINT = `cloudflared is not installed (it lets ChatGPT / Gemini / claude.ai reach this PC).
   Windows:  winget install --id Cloudflare.cloudflared   (then open a new terminal)
   macOS:    brew install cloudflared
@@ -37,15 +75,26 @@ export function startTunnel(localUrl: string, onUrl: (url: string) => void, onDo
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
-    let announced = false;
-    let buffer = "";
+    const parse = tunnelLogParser();
+    const seenErrors = new Set<string>();
+    let connected = false;
+    const slow = setTimeout(() => {
+      if (!connected && !stopped) console.error(BLOCKED_HINT);
+    }, 45_000);
     const scan = (chunk: Buffer) => {
-      if (announced) return;
-      buffer = (buffer + chunk.toString("utf8")).slice(-8192);
-      const url = parseTunnelUrl(buffer);
-      if (url) {
-        announced = true;
-        onUrl(url);
+      for (const ev of parse(chunk.toString("utf8"))) {
+        if (ev.type === "url") console.error(`[tunnel] got ${ev.url}, waiting for cloudflared to connect...`);
+        else if (ev.type === "ready") {
+          connected = true;
+          clearTimeout(slow);
+          onUrl(ev.url);
+        } else {
+          // One line per kind of error: the same failure repeats for every edge IP it retries.
+          const kind = ev.message.replace(/\d{1,3}(\.\d{1,3}){3}(:\d+)?/g, "<ip>");
+          if (seenErrors.has(kind) || seenErrors.size >= 20) continue;
+          seenErrors.add(kind);
+          console.error(`[tunnel] cloudflared: ${ev.message}`);
+        }
       }
     };
     child.stdout?.on("data", scan);
@@ -59,6 +108,7 @@ export function startTunnel(localUrl: string, onUrl: (url: string) => void, onDo
       }
     });
     child.on("exit", (code) => {
+      clearTimeout(slow);
       child = null;
       if (stopped || missing) return;
       onDown();

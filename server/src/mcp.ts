@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Course, Snapshot } from "../../shared/types.ts";
 import { findDates } from "../../shared/dates.ts";
-import { kindOf, textOf } from "./extract.ts";
+import { cachedTextOf, isWarming, kindOf, textOf, warmTextCache } from "./extract.ts";
 import { absolutePath, dataDir, loadIndex, loadSnapshot, type StoredFile } from "./store.ts";
 import { VERSION } from "./version.ts";
 
@@ -198,8 +198,10 @@ export function createMcpServer({ remote = false }: McpOptions = {}): McpServer 
     },
     wrap(async ({ query, course, limit = 30 }: { query: string; course?: string; limit?: number }) => {
       const s = await requireSnapshot();
-      const { results, scanned } = await searchMaterials(s, query, course, limit);
-      return ok(results.length ? results : `No matches for "${query}" in ${scanned} downloaded files.`);
+      const { results, scanned, pending } = await searchMaterials(s, query, course, limit);
+      const note = pending ? ` ${pending} of ${scanned} files are still being indexed (first search after a sync); search again in a minute for complete results.` : "";
+      if (!results.length) return ok(`No matches for "${query}" in ${scanned - pending} downloaded files.${note}`);
+      return ok(note ? { note: note.trim(), results } : results);
     }),
   );
 
@@ -385,6 +387,9 @@ export interface MaterialHit {
   snippet: string;
 }
 
+/** How long one search may spend extracting not-yet-cached files before answering with what it has. */
+export const searchBudget = { ms: 20_000 };
+
 export async function searchMaterials(s: Snapshot, query: string, course: string | undefined, limit: number) {
   const ids = new Set(matchCourses(s, course).map((c) => c.id));
   const files = Object.values(await loadIndex()).filter(
@@ -392,19 +397,30 @@ export async function searchMaterials(s: Snapshot, query: string, course: string
   );
   const terms = fold(query).split(/\s+/).filter(Boolean);
   const results: MaterialHit[] = [];
+  const deadline = Date.now() + searchBudget.ms;
+  let pending = 0;
   for (const f of files) {
-    const text = await textOf(f).catch(() => null);
+    // A cold cache takes over a minute to build, longer than remote clients wait: past the budget,
+    // or while the background indexer runs, only already-extracted files are searched.
+    const extract = Date.now() < deadline && !isWarming();
+    const text = await (extract ? textOf(f) : cachedTextOf(f)).catch(() => null);
+    if (text === null && !extract) pending++;
     if (!text) continue;
     let location = "";
     const lines = text.split("\n");
+    // Fold once per file (not once per line window): warm searches over ~300 files went from ~2 s to well under 1 s.
+    const folded = fold(text).split("\n");
+    const same = folded.length === lines.length;
     for (let i = 0; i < lines.length && results.length < limit; i++) {
       const marker = /^--- (page|slide) (\d+) ---$/.exec(lines[i]!);
       if (marker) {
         location = `${marker[1]} ${marker[2]}`;
         continue;
       }
-      const windowText = fold(lines.slice(i, i + 3).join(" "));
-      if (terms.every((t) => windowText.includes(t)) && terms.some((t) => fold(lines[i]!).includes(t))) {
+      const line = same ? folded[i]! : fold(lines[i]!);
+      if (!terms.some((t) => line.includes(t))) continue;
+      const windowText = same ? folded.slice(i, i + 3).join(" ") : fold(lines.slice(i, i + 3).join(" "));
+      if (terms.every((t) => windowText.includes(t))) {
         results.push({
           key: f.key,
           file: `${f.resource.name} (${f.resource.filename})`,
@@ -415,7 +431,8 @@ export async function searchMaterials(s: Snapshot, query: string, course: string
     }
     if (results.length >= limit) break;
   }
-  return { results, scanned: files.length };
+  if (pending) void warmTextCache(files);
+  return { results, scanned: files.length, pending };
 }
 
 function threadText(s: Snapshot, id: number): string {

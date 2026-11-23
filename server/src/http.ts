@@ -79,7 +79,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   send(res, 404, { error: "Not found" });
 }
 
-export function startHttp(): Promise<Server | null> {
+export function startHttp(port = BRIDGE_PORT): Promise<Server | null> {
   const server = createServer((req, res) => {
     if (!allowed(req)) return send(res, 403, { error: "Forbidden" });
     route(req, res).catch((err: Error & { status?: number }) => {
@@ -91,14 +91,14 @@ export function startHttp(): Promise<Server | null> {
     server.once("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
         // Another instance (e.g. Claude Desktop + Claude Code) already serves ingest; both read the same files.
-        console.error(`[bridge] port ${BRIDGE_PORT} in use; assuming another instance is ingesting`);
+        console.error(`[bridge] port ${port} in use; assuming another instance is ingesting`);
         resolvePromise(null);
       } else {
         throw err;
       }
     });
-    server.listen(BRIDGE_PORT, "127.0.0.1", () => {
-      console.error(`[bridge] listening on http://127.0.0.1:${BRIDGE_PORT}, data in ${dataDir}`);
+    server.listen(port, "127.0.0.1", () => {
+      console.error(`[bridge] listening on http://127.0.0.1:${(server.address() as { port: number }).port}, data in ${dataDir}`);
       resolvePromise(server);
     });
   });

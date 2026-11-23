@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Uniovi Virtual → Claude",
   "version": "0.2.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnBmQsxWb6hitDhCnte8YZdb55mGX2cDiIvpFU8shDNNuiumg3FkrvVLGI86a3OKuxy4D/U7v1JqtOY6uYrCMModNuFubClN10cRjaB/5hhD5Ou9zdZYGq+he2P+ytxi5pLXbGBNK0g5UyvtZ72zHK2I/PyeINUwMffXpGqysPGBlZ3Rs07Hbquw+TSfCeLDsCyTkQTjByVZOHvgBQnSh++aGHV383mOtX+GAc+MB0wsx+rfJaQMNekOUsv/gQ6oZn/oYxFeAtbxK3fJfhPohY1hh4Q2krsnuGbpX5vHhAg4p32oKQcUBX3ChFZBfBjAsE+EE1t/u5kCNK6oSRBFNQwIDAQAB",
   "description": "Upcoming exams, deadlines and new announcements on your Uniovi Virtual dashboard, notifications for important posts, and your course material available to Claude.",
-  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "scripting"],
+  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "scripting", "nativeMessaging"],
   "host_permissions": [
     "https://*.campusvirtual.uniovi.es/*",
     "https://campusvirtual.uniovi.es/*",

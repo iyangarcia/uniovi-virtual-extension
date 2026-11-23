@@ -14,6 +14,7 @@ node --test server/test/dates.test.ts                 # single file
 node --test --test-name-pattern="ISO" server/test/dates.test.ts   # single test
 npm run serve        # HTTP ingest bridge only (sync while Claude is closed)
 npm run mcp          # MCP over stdio + HTTP bridge (what Claude launches)
+npm run remote       # HTTP bridge + remote MCP (/mcp/<token> on :47824) + Cloudflare quick tunnel, for web AIs
 ```
 
 After changing extension code, run `npm run build`, click reload on the extension in `chrome://extensions`, then reload the campus tab so the new content script is injected.
@@ -35,7 +36,8 @@ The extension is useful on its own: the dashboard panel and notifications work f
 2. **Local server (`server/`)**: a single Node process.
    - `http.ts`: ingest (`GET /api/status`, `POST /api/snapshot`, `PUT /api/files?key=` with an `X-Resource` header). It binds to 127.0.0.1, requires a loopback `Host`, and rejects any `Origin` that isn't `chrome-extension://`.
    - `mcp.ts`: MCP tools plus three MCP prompts (`semana`, `preparar_examen`, `estudiar_tema`, shown as slash commands), all over stdio. They read from disk on every call, so several instances (Claude Code + Desktop) are safe. If the port is taken, the second instance skips HTTP.
-   - `store.ts`: `~/uniovi-data` (`UNIOVI_DATA_DIR`) holds `snapshot.json`, `files-index.json`, `files/<course>/<section>/<file>`, and the extracted-text cache in `.cache/`.
+   - `remote.ts` + `tunnel.ts` (`--remote` mode, `start-remote.bat`): MCP over Streamable HTTP (stateless, one `createMcpServer({ remote: true })` per request) on `127.0.0.1:47824`, exposed to ChatGPT / Gemini / claude.ai custom connectors through `cloudflared tunnel --url` (random `trycloudflare.com` URL per run). The only guard is the secret path `/mcp/<token>`, and anything else returns 404. The token is in `remote.json` in the data dir (`--rotate-token` replaces it), next to the live `publicUrl` + `pid`, which `/api/status` returns as `remoteUrl` for the popup's Copiar button. Remote mode hides `localPath`/`dataDir` from tool output. Web clients ignore MCP prompts, so the same guidance is in the server `instructions`. `search`/`fetch` follow ChatGPT's connector shape (ids `material:<key>`, `post:<id>`). Never loosen `http.ts`'s loopback checks to serve remote traffic. Student guide: `docs/USO-CON-IA-WEB.md`.
+   - `store.ts`: `~/uniovi-data` (`UNIOVI_DATA_DIR`) holds `snapshot.json`, `files-index.json`, `remote.json`, `files/<course>/<section>/<file>`, and the extracted-text cache in `.cache/`.
    - `extract.ts`: text from PDF (unpdf), PPTX/DOCX (fflate unzip + XML), and plain text, with `--- page N ---` / `--- slide N ---` markers that `search_materials` uses.
    - `shared/dates.ts` (used by `get_exam_dates` and the panel): heuristic Spanish date detection in forum posts. Each date is classified by its own sentence first, then a wider window. It over-reports on purpose, and results always carry a snippet and link. Keyword lists are tuned on real posts: "práctica(s)" was removed because it also means internships. Add a test when changing them.
    - Icons (`extension/icons/icon{16,48,128}.png`) are the circular Uniovi Virtual logo mark, cropped from the official banner and committed. `scripts/build.mjs` copies them into `dist`.

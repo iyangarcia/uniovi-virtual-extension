@@ -31,13 +31,13 @@ docs/PRUEBAS-MANUALES.md, not here.
 - [x] Without the helper installed, panel + notifications still work exactly as today
 
 ## 5. Installer (per-user, no admin)
-- [ ] `npm run package` builds `release/UnioviVirtual-Setup-<version>.exe` with Inno Setup: portable node.exe, bundled helper + host, extension folder; installs to %LOCALAPPDATA%\UnioviVirtual; HKCU Native Messaging registration; Startup entry that launches the helper hidden; uninstaller removes all of it (data folder kept)
-- [ ] Verified on this PC: silent install → helper autostart command works → /api/status ready → native host answers → silent uninstall leaves no registry keys/startup entry (state restored afterwards)
+- [x] `npm run package` builds `release/UnioviVirtual-Setup-<version>.exe` with Inno Setup: portable node.exe, bundled helper + host, extension folder; installs to %LOCALAPPDATA%\UnioviVirtual; HKCU Native Messaging registration; Startup entry that launches the helper hidden; uninstaller removes all of it (data folder kept)
+- [x] Verified on this PC: silent install → helper autostart command works → /api/status ready → native host answers → silent uninstall leaves no registry keys/startup entry (state restored afterwards)
 
 ## 6. Docs
-- [ ] docs/USO-CON-IA-WEB.md rewritten for students (Spanish): install, load extension, sync, copy URL into claude.ai / ChatGPT / Gemini, what to do when the URL changes, SmartScreen "Más información → Ejecutar de todas formas", privacy
-- [ ] docs/PRUEBAS-MANUALES.md: human checklist — campus Wi-Fi tunnel, each of the three AIs answering "¿qué exámenes tengo esta semana?", fresh-user install, reboot → URL change flow
-- [ ] CLAUDE.md + README updated (helper, providers, native host, packaging); start-remote.bat kept for developers or removed with a note
+- [x] docs/USO-CON-IA-WEB.md rewritten for students (Spanish): install, load extension, sync, copy URL into claude.ai / ChatGPT / Gemini, what to do when the URL changes, SmartScreen "Más información → Ejecutar de todas formas", privacy
+- [x] docs/PRUEBAS-MANUALES.md: human checklist — campus Wi-Fi tunnel, each of the three AIs answering "¿qué exámenes tengo esta semana?", fresh-user install, reboot → URL change flow
+- [x] CLAUDE.md + README updated (helper, providers, native host, packaging); start-remote.bat kept for developers or removed with a note
 
 ## 7. Gate
 - [ ] npm run typecheck, npm test and npm run build pass; all spawned helpers/tunnels stopped at the end
@@ -77,3 +77,35 @@ docs/PRUEBAS-MANUALES.md, not here.
 - **Without the helper:** snapshot, panel and notification code is unchanged, and the alarm makes no new requests until a connector URL has been seen.
 
 Gate after the merges: `npm run typecheck && npm test && npm run build && npm run package:helper && npm run package:host` gave 99 pass, 0 fail. All coordinator-spawned helpers and ssh processes are stopped (tasklist).
+
+### 2026-11-24 wave 2 (agent D installer + docs, f290592; merged and re-verified by the coordinator)
+
+**Section 5, installer.**
+- **Build:** `npm run package` runs scripts/package.mjs, then installer/UnioviVirtual.iss, and produces release/UnioviVirtual-Setup-0.1.0.exe (24.4 MB).
+- **Portable Node:** node.exe v24.20.0, checked against SHASUMS256 (sha256 5c976096…707b5).
+- **Inno Setup:** 6.7.3, installed per user with winget.
+- **Install:** PrivilegesRequired=lowest into {localappdata}\UnioviVirtual, with a /DIR override refused.
+- **Registry (HKCU):** Chrome and Edge NativeMessagingHosts\es.uniovi.virtual keys (uninsdeletekey), and a Run value using `conhost.exe --headless … helper.js --service` (no VBScript).
+- **config.json:** never shipped, so an existing one is kept.
+- **Uninstall:** runs `host.cjs --stop` first (a new flag, with the test "host --stop (installer / uninstaller)"), and the upgrade path stops the helper too.
+- **Agent's verification:**
+  - The Run value launched as stored gave conhost and node with MainWindowHandle 0 and 0 visible windows. /api/status (fixture data, tunnel off) returned `{"helperVersion":"0.1.0",…,"tunnel":{"state":"off"}}`.
+  - The installed host.cmd replied to status, stop and start; the helper survived the host exiting and had no window.
+  - The /STARTHELPER upgrade stopped the old helper and started a new hidden one.
+  - The uninstall killed the helper and removed the app dir. A registry diff against the pre-state was identical, and ~\uniovi-data had 638 files with identical mtimes before and after.
+- **Coordinator re-run** (fixture config {tunnel:false}): `npm run package` passes, and the gate gives 100 pass.
+  - Silent install exit 0. The files were present, the Chrome key pointed at …\UnioviVirtual\es.uniovi.virtual.json, the Run value matched, config.json was kept, the manifest path was the absolute host.cmd, and no helper was started by the silent install.
+  - Silent uninstall exit 0. The app dir is gone, the Chrome and Edge keys are gone, the Run value is gone, and the ~\uniovi-data count is unchanged. Pre-state restored.
+- **Not verified here (manual checklist §6):**
+  - Chrome launching the host from the popup, and the helper surviving Chrome closing.
+  - The interactive wizard.
+  - A reboot and logon autostart.
+  - A non-ASCII username.
+  - SmartScreen.
+  - The tunnel on campus.
+
+**Section 6, docs.**
+- docs/USO-CON-IA-WEB.md is rewritten for students in Spanish. It covers install, SmartScreen, the extension, the first sync, popup states, claude.ai, ChatGPT developer mode, Gemini (stating it depends on plan and country), URL changes, pinggy's 60 min sessions, privacy, examples and troubleshooting.
+- docs/PRUEBAS-MANUALES.md has a new §6 human checklist.
+- CLAUDE.md covers the package commands, service, config, providers, native host (host.cjs), the installer, and gotchas (reserved port ranges cause EACCES; `Start-Process -Wait` waits for the whole process tree).
+- README has a student intro. start-remote.bat is kept for developers, with cloudflared now optional.

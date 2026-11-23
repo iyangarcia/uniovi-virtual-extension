@@ -8,27 +8,27 @@ Human-only checks (campus Wi-Fi, logging into the AIs, the installer as a fresh 
 docs/PRUEBAS-MANUALES.md, not here.
 
 ## 1. Tunnel that works on campus networks (443, no account)
-- [ ] Spike: tunnelmole client (npm) — licence OK to bundle, connects over wss:443, random https URL, MCP Streamable HTTP POSTs pass through; findings in Log
-- [ ] tunnel.ts → pluggable providers behind one interface (url/ready/error/down): tunnelmole (default), localhost.run via built-in `ssh` (port 443 if supported, else 22), cloudflared (only if installed); automatic fallback in that order when a provider doesn't become ready within N s; restart-on-drop kept
-- [ ] Unit tests: URL parsing per provider (real captured output as fixtures), fallback order, URL republished after a drop
-- [ ] End-to-end from this PC: `--remote` through tunnelmole, MCP SDK client over the PUBLIC url lists tools and calls get_deadlines/search/fetch against a fixture data dir; wrong token / other paths → 404 over the public url
-- [ ] Same end-to-end through the localhost.run fallback
+- [x] Spike: tunnelmole client (npm) — licence OK to bundle, connects over wss:443, random https URL, MCP Streamable HTTP POSTs pass through; findings in Log
+- [x] tunnel.ts → pluggable providers behind one interface (url/ready/error/down): tunnelmole (default), localhost.run via built-in `ssh` (port 443 if supported, else 22), cloudflared (only if installed); (order revised after the spike, see Log: localhost.run → tunnelmole → pinggy → cloudflared) automatic fallback when a provider doesn't become ready within N s; restart-on-drop kept
+- [x] Unit tests: URL parsing per provider (real captured output as fixtures), fallback order, URL republished after a drop
+- [x] End-to-end from this PC: `--remote` through tunnelmole, MCP SDK client over the PUBLIC url lists tools and calls get_deadlines/search/fetch against a fixture data dir; wrong token / other paths → 404 over the public url
+- [x] Same end-to-end through the localhost.run fallback
 
 ## 2. Helper (the existing server, as a background service)
-- [ ] Config file `%LOCALAPPDATA%\UnioviVirtual\config.json` (dataDir, tunnel on/off); dataDir default Documents\Uniovi, or existing %USERPROFILE%\uniovi-data; UNIOVI_DATA_DIR still overrides
-- [ ] `--service` mode: ingest + remote MCP + tunnel, no console banner, logs to a rotating file in %LOCALAPPDATA%\UnioviVirtual\logs; single instance (second start exits cleanly)
-- [ ] GET /api/status reports helper version, tunnel state (connecting/ready/error + provider + last error) besides remoteUrl
-- [ ] Fully bundled build (`npm run package:helper`: esbuild with all packages bundled, runs with plain node.exe and no node_modules); verified by running it from a temp dir
+- [x] Config file `%LOCALAPPDATA%\UnioviVirtual\config.json` (dataDir, tunnel on/off); dataDir default Documents\Uniovi, or existing %USERPROFILE%\uniovi-data; UNIOVI_DATA_DIR still overrides
+- [x] `--service` mode: ingest + remote MCP + tunnel, no console banner, logs to a rotating file in %LOCALAPPDATA%\UnioviVirtual\logs; single instance (second start exits cleanly)
+- [x] GET /api/status reports helper version, tunnel state (connecting/ready/error + provider + last error) besides remoteUrl
+- [x] Fully bundled build (`npm run package:helper`: esbuild with all packages bundled, runs with plain node.exe and no node_modules); verified by running it from a temp dir
 
 ## 3. Native Messaging (extension ↔ helper control)
-- [ ] Native host `es.uniovi.virtual` (node.exe + bundled host script): messages status / start / stop / setDataDir / setTunnel; starts the helper detached and hidden if not running
-- [ ] Test: drive the host over stdio with Chrome's 4-byte length framing (status, start → /api/status answers, stop)
-- [ ] Extension: `nativeMessaging` permission, fixed `key` in manifest (ID documented, matches allowed_origins)
+- [x] Native host `es.uniovi.virtual` (node.exe + bundled host script): messages status / start / stop / setDataDir / setTunnel; starts the helper detached and hidden if not running
+- [x] Test: drive the host over stdio with Chrome's 4-byte length framing (status, start → /api/status answers, stop)
+- [x] Extension: `nativeMessaging` permission, fixed `key` in manifest (ID documented, matches allowed_origins)
 
 ## 4. Extension popup
-- [ ] Popup shows helper state (not installed / stopped / connecting / ready / error), Iniciar/Detener, the URL with Copiar, the data folder with Cambiar, and the privacy note (provider sees traffic in transit) — textContent only
-- [ ] Background notifies when the connector URL changes ("pega la nueva URL en tu IA"), at most once per change
-- [ ] Without the helper installed, panel + notifications still work exactly as today
+- [x] Popup shows helper state (not installed / stopped / connecting / ready / error), Iniciar/Detener, the URL with Copiar, the data folder with Cambiar, and the privacy note (provider sees traffic in transit) — textContent only
+- [x] Background notifies when the connector URL changes ("pega la nueva URL en tu IA"), at most once per change
+- [x] Without the helper installed, panel + notifications still work exactly as today
 
 ## 5. Installer (per-user, no admin)
 - [ ] `npm run package` builds `release/UnioviVirtual-Setup-<version>.exe` with Inno Setup: portable node.exe, bundled helper + host, extension folder; installs to %LOCALAPPDATA%\UnioviVirtual; HKCU Native Messaging registration; Startup entry that launches the helper hidden; uninstaller removes all of it (data folder kept)
@@ -43,3 +43,37 @@ docs/PRUEBAS-MANUALES.md, not here.
 - [ ] npm run typecheck, npm test and npm run build pass; all spawned helpers/tunnels stopped at the end
 
 ## Log
+
+### 2026-11-24 wave 1 (agents A tunnel, B helper, C extension; merged and re-verified by the coordinator)
+
+**Section 1, tunnel (agent A, e77adad).**
+- **Spike (the plan changed):** the tunnelmole npm client is MIT, but it connects on wss **:8083**, not 443. Through it, MCP notifications came back as nginx 502, because the client copies `transfer-encoding: chunked` onto a body it has already de-chunked. It also calls process.exit, writes to stdout, and sends telemetry. So it is not bundled. `server/src/tunnel/tunnelmole.ts` reimplements its protocol on Node's built-in WebSocket instead (no new dependency).
+- **Other providers:** localhost.run accepts ssh on **22 only** (443 and 80 are closed). **pinggy** (`ssh -p 443 nokey@a.pinggy.io`) is the only no-account provider found on 443, and its anonymous sessions end after 60 min. Tunnelmole and pinggy hostnames contain the student's public IP.
+- **Order:** localhost.run (22), tunnelmole (8083), pinggy (443), cloudflared (7844, only if installed). Each gets a 25 s ready timeout, all-fail retries back off from 10 to 120 s, and a drop restarts from the first provider.
+- **Tests:** server/test/tunnel.test.ts (19 tests) uses real captured fixtures in server/test/fixtures/tunnel/.
+- **Agent's public end-to-end runs:** `e2e-remote.sh` passed over tunnelmole, over localhost.run, over a real fallback (tunnelmole on a dead endpoint, then localhost.run), and over pinggy. A drop test killed ssh.exe, and the tunnel reconnected with a new URL that was republished.
+- **Coordinator re-run:** `e2e-remote.sh coord-pinggy pinggy` gave https://…free.pinggy.net. The tool list, get_deadlines (Práctica 2), search (material:5:/apuntes.txt, post:10) and fetch all PASS. Six wrong token/path requests all returned 404. The helper wrote 0 stdout bytes, and remote.json publicUrl was cleared after stop.
+- **Campus Wi-Fi is NOT verified.** Ports 22 and 8083 may be blocked there, leaving pinggy on 443 (60-min URLs). This is in the manual checklist.
+
+**Section 2, helper (agent B, 03ffa27, then coordinator 751c944 and the merge).**
+- **Data folder:** config.json comes from config.ts. Data dir precedence is UNIOVI_DATA_DIR, then config, then ~/uniovi-data, then ~/Documents/Uniovi. The test is "config.json: defaults, round trip, and data dir precedence".
+- **`--service`:** service.ts plus log.ts give a file log rotating at 1 MB (3 kept), a pid file, and a single-instance check (pid alive AND remote port answers).
+- **/api/status:** returns helperVersion and tunnel, which are persisted in remote.json with a pid liveness check.
+- **Coordinator check:** copied release/app (no node_modules) to tmp\coord\run, then ran `UNIOVI_TUNNEL_PROVIDERS=pinggy node helper.js --service`.
+  - /api/status returned `{"helperVersion":"0.1.0","tunnel":{"state":"ready","provider":"pinggy","url":"https://…run.pinggy-free.link"},"remoteUrl":"…/mcp/<token>"}`.
+  - The e2e client got 10/10 PASS over the public URL.
+  - A second `node helper.js --service` exited 0, logging "another helper is already running".
+  - svc.out was 0 bytes, and the log is at app\logs\helper.log.
+- **Bundle:** release/app/helper.js is 3.9 MB, ESM, next to package.json {"type":"module"}.
+
+**Sections 3 and 4, native host and extension (agent C, 4350dfa, then coordinator 751c944).**
+- **Host rename:** the host is renamed **host.cjs**. Otherwise the ESM package.json in the install folder made Node load it as ESM, and the tests timed out.
+- **Tests:** nativehost.test.ts drives the host over 4-byte framing (status, start, /api/status 200, setTunnel restart, stop, stale pid, oversized frame), against an install dir that has the ESM package.json. The extension-ID test recomputes amagekgnbkaeigjhbenkilkhoklkdieo from the manifest key, and it matches allowed_origins.
+- **Coordinator check with the REAL bundled helper**, framed messages to `node host.cjs`:
+  - status returned running:true.
+  - stop returned running:false, the bridge went down, and the ssh tunnel child was gone (taskkill /T).
+  - setTunnel false, then start, gave /api/status `"tunnel":{"state":"off"}`; stop then took the bridge down again.
+- **Popup:** deriveHelperView is unit-tested (nativehost-popup.test.ts), and the URL-change rule remoteUrlChange is unit-tested. Typecheck and build pass. Nobody has clicked the popup in Chrome yet; that's on the manual checklist, together with "does a helper started by Chrome's host survive Chrome closing" (job object).
+- **Without the helper:** snapshot, panel and notification code is unchanged, and the alarm makes no new requests until a connector URL has been seen.
+
+Gate after the merges: `npm run typecheck && npm test && npm run build && npm run package:helper && npm run package:host` gave 99 pass, 0 fail. All coordinator-spawned helpers and ssh processes are stopped (tasklist).

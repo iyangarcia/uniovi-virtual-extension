@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import type { TunnelStatus } from "../../shared/helper.ts";
-import { loadConfig, logDir, pidFile } from "./config.ts";
+import { appDir, loadConfig, logDir, pidFile } from "./config.ts";
 import { warmTextCache } from "./extract.ts";
 import { startHttp } from "./http.ts";
 import { openFileLog, redirectConsole } from "./log.ts";
@@ -19,53 +19,17 @@ import { VERSION } from "./version.ts";
 // a stale pid file can name an unrelated process that reused the number). If the remote port is
 // taken by anything else, the second start exits 0 too.
 
-// ---------------------------------------------------------------- tunnel adapter
-// The shape the helper needs from tunnel.ts. Today it adapts the cloudflared-only
-// startTunnel(localUrl, onUrl, onDown); once tunnel.ts has providers this becomes
-// `startTunnel(localUrl, { onStatus })`.
+// ---------------------------------------------------------------- tunnel
+// tunnel.ts tries the providers in TUNNEL_PROVIDERS order and reports every change as a TunnelStatus.
+// ssh known_hosts and askpass live in the app dir instead of %TEMP%.
 
 export interface ServiceTunnel {
   stop(): void;
   status(): TunnelStatus;
 }
 
-const READY_TIMEOUT_MS = 60_000;
-
 export function startServiceTunnel(localUrl: string, onStatus: (s: TunnelStatus) => void): ServiceTunnel {
-  let current: TunnelStatus = { state: "connecting", provider: "cloudflared", since: nowUnix() };
-  const set = (s: Omit<TunnelStatus, "since">) => {
-    current = { ...s, since: nowUnix() };
-    onStatus(current);
-  };
-  let timer: NodeJS.Timeout | undefined;
-  const arm = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (current.state === "connecting")
-        set({ state: "error", provider: "cloudflared", error: "Tunnel not ready after 60 s (cloudflared missing, or the network blocks it)" });
-    }, READY_TIMEOUT_MS);
-    timer.unref();
-  };
-  onStatus(current);
-  arm();
-  const tunnel = startTunnel(
-    localUrl,
-    (url) => {
-      clearTimeout(timer);
-      set({ state: "ready", provider: "cloudflared", url });
-    },
-    () => {
-      set({ state: "connecting", provider: "cloudflared", error: "Tunnel dropped; reconnecting" });
-      arm();
-    },
-  );
-  return {
-    stop() {
-      clearTimeout(timer);
-      tunnel.stop();
-    },
-    status: () => current,
-  };
+  return startTunnel(localUrl, { onStatus, stateDir: join(appDir(), "tunnel") });
 }
 
 // ---------------------------------------------------------------- single instance

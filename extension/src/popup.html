@@ -16,12 +16,23 @@
       fieldset { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 6px; padding: 6px 10px; }
       legend { font-size: 12px; opacity: 0.8; }
       input[type="number"] { width: 4em; }
+      .remote { margin: 8px 0; padding: 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
+      .remote h2 { font-size: 13px; margin: 0 0 4px; }
+      .remote input { width: 100%; box-sizing: border-box; font: 11px ui-monospace, monospace; }
+      .remote button { margin: 6px 0 4px; padding: 6px; }
+      .remote p { font-size: 11px; opacity: 0.8; margin: 4px 0 0; }
     </style>
   </head>
   <body>
     <h1>Uniovi Virtual → Claude</h1>
     <div id="bridge" class="bridge">Checking local bridge…</div>
     <div id="status" class="status"></div>
+    <section id="remote" class="remote" hidden>
+      <h2>Usar con ChatGPT / Gemini / Claude web</h2>
+      <input id="remoteUrl" readonly />
+      <button id="copyRemote">Copiar URL del conector</button>
+      <p>Pégala como conector personalizado (MCP) en tu chat. Es privada: quien la tenga puede leer tus asignaturas. Cambia cada vez que reinicias <code>start-remote</code>.</p>
+    </section>
     <button id="sync">Sync now</button>
     <fieldset>
       <legend>Settings</legend>

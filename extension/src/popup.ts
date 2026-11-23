@@ -17,11 +17,23 @@ async function renderBridge() {
     const s = await send<BridgeStatus>({ type: "bridge-status" });
     el.textContent = `Claude connected · data in ${s.dataDir}`;
     el.classList.remove("down");
+    renderRemote(s.remoteUrl);
   } catch {
     // Not an error: the campus panel and notifications work without Claude.
     el.textContent = "Claude not open · data is kept here and handed over when you open Claude";
     el.classList.remove("down");
   }
+}
+
+function renderRemote(url: string | undefined) {
+  $("remote").hidden = !url;
+  if (!url) return;
+  $<HTMLInputElement>("remoteUrl").value = url;
+  $("copyRemote").onclick = async () => {
+    await navigator.clipboard.writeText(url);
+    $("copyRemote").textContent = "Copiada ✓";
+    setTimeout(() => ($("copyRemote").textContent = "Copiar URL del conector"), 1500);
+  };
 }
 
 async function initSettings() {

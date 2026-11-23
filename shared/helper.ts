@@ -19,9 +19,13 @@ export const APP_DIR_NAME = "UnioviVirtual";
 
 // ---- Tunnel ---------------------------------------------------------------------------------
 
-/** Tried in this order; a provider that isn't ready in time falls through to the next. */
-export type TunnelProviderName = "tunnelmole" | "localhost.run" | "cloudflared";
-export const TUNNEL_PROVIDERS: readonly TunnelProviderName[] = ["tunnelmole", "localhost.run", "cloudflared"];
+/**
+ * Tried in this order; a provider that isn't ready in time falls through to the next.
+ * Ports (verified 2026-11-24): localhost.run ssh 22, tunnelmole wss 8083, pinggy ssh 443 (the only
+ * one on 443, so the one expected to pass campus Wi-Fi; anonymous sessions end after 60 min), cloudflared 7844 (only if installed).
+ */
+export type TunnelProviderName = "localhost.run" | "tunnelmole" | "pinggy" | "cloudflared";
+export const TUNNEL_PROVIDERS: readonly TunnelProviderName[] = ["localhost.run", "tunnelmole", "pinggy", "cloudflared"];
 
 export interface TunnelStatus {
   /** off: tunnel disabled in config or not started. connecting: trying a provider. ready: url reachable. error: every provider failed (retrying). */

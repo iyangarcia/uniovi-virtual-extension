@@ -35,7 +35,7 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [ ] Welcome page opens on install: extension ✓, "Entra en el Campus Virtual" ✓ after first sync, "Conecta tu IA" cards (Claude / ChatGPT / Gemini) with Conectar automáticamente + Copiar + steps, honest plan notes
 - [ ] Auto-fill: optional host permission requested per AI on click; opens its connector page and fills name + URL; leaves the AI's own confirm to her; falls back to Copiar with a note; selectors isolated per AI
 - [ ] Popup: one plain sentence, switch "Conectar con mi IA", Copiar enlace, Mis apuntes, Cómo conectarla; advanced: Cambiar enlace; no "servidor/túnel/relay/Node" words outside advanced
-- [ ] "Mis apuntes" page: course → section → files, sort (name/date/course), filter, text search, "Nuevo" marks, open in new tab via blob URL (PDF/images/text), "Abrir en ventana nueva", Descargar for Office files; textContent only; tests for sort/filter/blob type
+- [x] "Mis apuntes" page: course → section → files, sort (name/date/course), filter, text search, "Nuevo" marks, open in new tab via blob URL (PDF/images/text), "Abrir en ventana nueva", Descargar for Office files; textContent only; tests for sort/filter/blob type
 - [ ] Update notice: daily check of the latest GitHub release; "Hay una versión nueva" with the 2 steps; manifest `key` kept so the ID (and data) survive extracting over the same folder — verified v1 → v2 keeps data and link
 
 ## 5. Distribution + docs
@@ -93,3 +93,20 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
   - Wrong token → 404. `aiConnection=false` → relay 503, then back on → connected. Token rotation → the old URL gives 404 and the new one works.
 - After merging into master: typecheck clean, `npm test` 140 pass / 0 fail, build OK. wrangler/workerd and every Chrome for Testing were stopped. The worktrees were removed after unlinking their node_modules junctions, and the main node_modules is intact.
 - Not verified: the real campus download path after a redirect, and Edge.
+
+### Section 4, "Mis apuntes" (agent E, re-checked by coordinator)
+- What it does: `extension/src/files.{html,ts}` plus the pure `extension/src/files/model.ts`:
+  - courses → sections → files, sorted by campus order, name or date; an accent-insensitive filter; "Buscar dentro de los apuntes" (`searchMaterials` over IndexedDB, with page/slide hits);
+  - "Nuevo" badges since `filesLastVisit` (nothing is marked on the first visit);
+  - skipped archives greyed out with "Abrir en el campus"; Office files get "Descargar";
+  - deep links `?course=` and `?q=`; built with textContent only; light and dark themes.
+- Opening files: a blob URL dies with the page that created it, so files open in a viewer tab, `files.html?open=<key>&page=N`, which builds its own blob and shows Chrome's PDF viewer in an iframe.
+  - That tab survives closing the list and can be reloaded.
+  - "Ventana nueva" opens the same viewer as `chrome.windows.create({type:"normal"})`, for side-by-side study.
+  - HTML/SVG/code open as plain text, so campus HTML never runs in the extension origin.
+- Evidence:
+  - `server/test/files-page.test.ts`: 11 tests.
+  - Coordinator re-run of `tmp/pptr/verify-files.mjs` against **master's build** after the merge, in Chrome for Testing with fixture data: **RESULT pass=45 fail=0**. The run covered grouping, the sort orders, the filter, search ("trapecio" → página 2, opened at `#page=2`), a PDF/txt/png opening in a new tab, a new window, the docx downloaded, the zip linking to the campus, "Nuevo" over 3 visits, and no horizontal scroll at 900 px.
+  - Master gate: 151 pass / 0 fail, typecheck clean, build OK.
+  - Screenshots: `docs/img/mis-apuntes.png`, `docs/img/mis-apuntes-busqueda.png`.
+- Not verified: whether Chrome's viewer actually scrolls to page N (the URL carries `#page=N`), and performance on a large real store (about 340 files).

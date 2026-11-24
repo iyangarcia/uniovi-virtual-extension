@@ -32,20 +32,20 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [x] Verified in Chrome for Testing (puppeteer, fixture data, local wrangler relay): MCP client 10/10 through the relay to the loaded extension; service worker stays connected ≥ 30 min (or reconnects within 60 s)
 
 ## 4. UX for non-technical students
-- [ ] Welcome page opens on install: extension ✓, "Entra en el Campus Virtual" ✓ after first sync, "Conecta tu IA" cards (Claude / ChatGPT / Gemini) with Conectar automáticamente + Copiar + steps, honest plan notes
-- [ ] Auto-fill: optional host permission requested per AI on click; opens its connector page and fills name + URL; leaves the AI's own confirm to her; falls back to Copiar with a note; selectors isolated per AI
-- [ ] Popup: one plain sentence, switch "Conectar con mi IA", Copiar enlace, Mis apuntes, Cómo conectarla; advanced: Cambiar enlace; no "servidor/túnel/relay/Node" words outside advanced
+- [x] Welcome page opens on install: extension ✓, "Entra en el Campus Virtual" ✓ after first sync, "Conecta tu IA" cards (Claude / ChatGPT / Gemini) with Conectar automáticamente + Copiar + steps, honest plan notes
+- [x] Auto-fill: optional host permission requested per AI on click; opens its connector page and fills name + URL; leaves the AI's own confirm to her; falls back to Copiar with a note; selectors isolated per AI
+- [x] Popup: one plain sentence, switch "Conectar con mi IA", Copiar enlace, Mis apuntes, Cómo conectarla; advanced: Cambiar enlace; no "servidor/túnel/relay/Node" words outside advanced
 - [x] "Mis apuntes" page: course → section → files, sort (name/date/course), filter, text search, "Nuevo" marks, open in new tab via blob URL (PDF/images/text), "Abrir en ventana nueva", Descargar for Office files; textContent only; tests for sort/filter/blob type
-- [ ] Update notice: daily check of the latest GitHub release; "Hay una versión nueva" with the 2 steps; manifest `key` kept so the ID (and data) survive extracting over the same folder — verified v1 → v2 keeps data and link
+- [x] Update notice: daily check of the latest GitHub release; "Hay una versión nueva" with the 2 steps; manifest `key` kept so the ID (and data) survive extracting over the same folder — verified v1 → v2 keeps data and link
 
 ## 5. Distribution + docs
-- [ ] `npm run package` → release/uniovi-virtual-<version>.zip (extension only)
-- [ ] docs/index.html (GitHub Pages): Descargar button, 3 steps with pictures (developer mode → Cargar descomprimida → folder), "¿Qué IA puedo usar?"
-- [ ] docs/USO-CON-IA-WEB.md and docs/PRUEBAS-MANUALES.md rewritten for the new flow (fresh student, each AI, auto-fill, Chrome closed message, update flow, deploy relay)
+- [x] `npm run package` → release/uniovi-virtual-<version>.zip (extension only)
+- [x] docs/index.html (GitHub Pages): Descargar button, 3 steps with pictures (developer mode → Cargar descomprimida → folder), "¿Qué IA puedo usar?"
+- [x] docs/USO-CON-IA-WEB.md and docs/PRUEBAS-MANUALES.md rewritten for the new flow (fresh student, each AI, auto-fill, Chrome closed message, update flow, deploy relay)
 
 ## 6. Retire the installer path
-- [ ] Removed: installer/, nativehost, service, tunnel*, remote, config, log, shared/helper.ts, native.ts, helperState.ts, package/build-host scripts and their tests, nativeMessaging permission (key kept); stdio `npm run mcp` + bridge still work for Claude Code
-- [ ] CLAUDE.md and README describe the new architecture
+- [x] Removed: installer/, nativehost, service, tunnel*, remote, config, log, shared/helper.ts, native.ts, helperState.ts, package/build-host scripts and their tests, nativeMessaging permission (key kept); stdio `npm run mcp` + bridge still work for Claude Code
+- [x] CLAUDE.md and README describe the new architecture
 
 ## 7. Review + gate
 - [ ] One review agent over the whole goal diff (bugs, fixes, simplifications); what holds up is fixed with tests
@@ -110,3 +110,31 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
   - Master gate: 151 pass / 0 fail, typecheck clean, build OK.
   - Screenshots: `docs/img/mis-apuntes.png`, `docs/img/mis-apuntes-busqueda.png`.
 - Not verified: whether Chrome's viewer actually scrolls to page N (the URL carries `#page=N`), and performance on a large real store (about 340 files).
+
+### Sections 4–6, UX + distribution + retirement (agents D and F, re-checked by coordinator)
+- **Incident (coordinator), now fixed:** the user's own `npm run mcp` was listening on 127.0.0.1:47823. The extension forwards each sync to that optional dev bridge, so the fixture data from the section-3 integrated runs reached the real `~/uniovi-data`. It added 10 fake files under `files/{DCIV,CAL1,FIS}` and **overwrote `snapshot.json`** with a fixture snapshot. Agent D spotted it.
+  - Cleanup: backed up to `$CLAUDE_JOB_DIR/tmp/uniovi-data-backup/`, removed the 10 index entries and the 3 folders (index back to the 343 real files), and moved the fake snapshot aside.
+  - The real snapshot comes back with the next campus sync (manual step).
+  - All later browser tests fail `http://127.0.0.1:47823/*` through CDP Fetch; the folder still has 343 files afterwards. CLAUDE.md gotcha added.
+- **Merges:** `goal05/ux` and `goal05/retire` merged. The conflict (`nativehost.test.ts`, edited by one side and deleted by the other) was resolved by deleting it, and `shared/helper.ts` was removed (nothing imports it).
+  - Master gate: typecheck clean (extension, server, relay), `npm test` **96 pass / 0 fail** (the helper/tunnel/native-host tests went away with that code; ux 7, files 11, agent 11, relay 12, mcp-core 5 …), build OK.
+  - `npm run package` → `release/uniovi-virtual-0.2.0.zip` (12 files, 1.86 MB) plus `release/uniovi-virtual.zip` (same bytes).
+- **Welcome, auto-fill, popup, update notice (D):**
+  - Coordinator re-run of `tmp/pptr/verify-ux-master.mjs` on **master's build**, with every hostname unresolvable and the bridge blocked: **RESULT pass=31 fail=0 (bridge requests blocked: 4)**. It covered:
+    - the welcome page opening on install, its 3 live steps, and the honest per-AI plan notes;
+    - auto-fill on local look-alike pages of Claude, ChatGPT and Gemini: name and URL filled through input events, the confirm button clicked 0 times;
+    - the fallback on a broken page: "No pude rellenarlo solo: el enlace está copiado…", with the link on the clipboard;
+    - Copiar;
+    - no jargon outside "Opciones avanzadas";
+    - Cambiar enlace (token rotated, the old link gets 404);
+    - the switch off → relay 503 → on → connected;
+    - an update stub v99.1.0 → "Hay una versión nueva" with the 2 steps (an offline check stays silent).
+  - Screenshots: `docs/img/{welcome,welcome-empty,popup,popup-empty,popup-advanced,popup-update}.png`.
+- **v1 → v2 update (coordinator, `tmp/pptr/verify-update.mjs`):** v0.2.0 was loaded from a folder with a persistent profile and fixture data (bridge blocked). The folder was then overwritten with the build with its version bumped to 0.2.1, and loaded again. Result: same ID `amagekgnbkaeigjhbenkilkhoklkdieo`, **same id/secret/token (so the AI link is unchanged)**, and the stored file still in IndexedDB: **RESULT pass=4 fail=0**.
+- **Retirement and docs (F):**
+  - Removed: installer/, nativehost, service, tunnel + tunnel/, remote, config, log, the old package and build-host scripts, start-remote.bat, their tests, `nativeMessaging`; `key` kept.
+  - F's smoke tests: stdio `npm run mcp` (temp data, bridge 48931) lists the same 11 tools, and `--http-only` answers `/api/status`.
+  - The extracted zip loads in Chrome for Testing and its worker starts with the fixed ID.
+  - `docs/index.html` is the Pages download page: Descargar → `releases/latest/download/uniovi-virtual.zip`, 3 steps with real Spanish `chrome://extensions` screenshots, "¿Qué IA puedo usar?", privacy, updates and an FAQ.
+  - `docs/USO-CON-IA-WEB.md`, `docs/PRUEBAS-MANUALES.md`, CLAUDE.md and README were rewritten. The coordinator corrected the Mis apuntes viewer note in CLAUDE.md.
+- **Not verified (manual):** auto-fill on the real claude.ai/chatgpt.com/gemini (start URLs and selectors come from web notes); the real `chrome.permissions.request` prompt; the toolbar popup; GitHub Pages rendering; Edge. `paso3-extension-cargada.png` still shows the old name "Uniovi Virtual → Claude" and should be retaken (`tmp/pptr/g5f-shots.mjs`).

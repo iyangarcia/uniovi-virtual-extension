@@ -3,18 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Chrome extension + local MCP bridge that gives Claude access to Uniovi Virtual (Moodle) materials, forum announcements, exam dates and deadlines.",
+  "description": "Chrome extension that gives your AI (claude.ai, ChatGPT, Claude Code) access to Uniovi Virtual (Moodle) materials, forum announcements, exam dates and deadlines.",
   "engines": { "node": ">=22.18" },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "package:helper": "node scripts/build.mjs --helper",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc -p extension && tsc -p server && tsc -p relay",
     "test": "node --test --test-force-exit \"server/test/**/*.test.ts\" \"relay/test/**/*.test.ts\"",
     "serve": "node server/dist/index.js --http-only",
     "mcp": "node server/dist/index.js",
-    "remote": "node server/dist/index.js --remote",
-    "package:host": "node scripts/build-host.mjs",
     "package": "node scripts/package.mjs"
   },
   "dependencies": {

@@ -1,7 +1,6 @@
 // Data model shared by the extension (producer) and the local server (consumer).
 // Timestamps are Unix seconds, as Moodle returns them.
 
-import type { TunnelStatus } from "./helper.ts";
 export const BRIDGE_PORT = 47823;
 export const BRIDGE_URL = `http://127.0.0.1:${BRIDGE_PORT}`;
 
@@ -86,10 +85,4 @@ export interface BridgeStatus {
   lastSync?: number;
   /** Resource keys already stored, mapped to the timemodified they were stored with. */
   knownFiles: Record<string, number>;
-  /** Public MCP connector URL for web AIs, while `npm run remote` is running. Secret: grants read access. */
-  remoteUrl?: string;
-  /** Version of the helper process answering (same as `version` today; kept separate for the popup). */
-  helperVersion?: string;
-  /** Tunnel state of the live remote/service process, if one is running. */
-  tunnel?: TunnelStatus;
 }

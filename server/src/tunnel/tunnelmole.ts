@@ -16,6 +16,10 @@ import type { ProviderEvent, ProviderSession, TunnelProvider } from "./provider.
 export const TUNNELMOLE_ENDPOINT = "wss://service.tunnelmole.com:8083";
 const CLIENT_VERSION = "2.4.3"; // protocol version we mirror
 const LOCAL_TIMEOUT_MS = 120_000;
+/** Concurrent forwarded requests; beyond this the reply is 503 (web AIs make a few at a time). */
+const MAX_INFLIGHT = 16;
+/** Base64 request bodies above this are refused before decoding (remote.ts caps MCP bodies far lower). */
+const MAX_BODY_B64 = 8 * 1024 * 1024;
 
 /** Headers that describe one hop and must not be copied onto the forwarded response. */
 const HOP_BY_HOP = new Set(["connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "te", "trailer", "content-length"]);
@@ -23,6 +27,24 @@ const HOP_BY_HOP = new Set(["connection", "keep-alive", "transfer-encoding", "up
 export function forwardableHeaders(headers: IncomingHttpHeaders, bodyLength: number): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {};
   for (const [k, v] of Object.entries(headers)) if (v !== undefined && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
+  out["content-length"] = String(bodyLength);
+  return out;
+}
+
+/**
+ * Request headers safe to send to the local endpoint. Hop-by-hop and framing headers from the
+ * remote side are dropped and content-length is set from the decoded body: forwarding them
+ * verbatim on a keep-alive socket let a lying content-length smuggle a second request.
+ */
+export function requestHeaders(headers: unknown, bodyLength: number, host: string): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {};
+  if (headers && typeof headers === "object")
+    for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
+      const key = k.toLowerCase();
+      if (HOP_BY_HOP.has(key) || key === "host" || key === "expect") continue;
+      if (typeof v === "string" || (Array.isArray(v) && v.every((x) => typeof x === "string"))) out[key] = v as string | string[];
+    }
+  out.host = host;
   out["content-length"] = String(bodyLength);
   return out;
 }
@@ -44,9 +66,19 @@ export interface ForwardedRequest {
 
 function forwardLocal(localUrl: string, msg: ForwardedRequest): Promise<{ statusCode: number; headers: IncomingHttpHeaders; body: Buffer }> {
   const target = new URL(localUrl);
+  const body = typeof msg.body === "string" && msg.body ? Buffer.from(msg.body, "base64") : undefined;
+  const method = typeof msg.method === "string" && /^[A-Z]{1,10}$/.test(msg.method) ? msg.method : "GET";
+  const url = typeof msg.url === "string" ? msg.url : "/";
   return new Promise((resolve, reject) => {
     const req = request(
-      { hostname: target.hostname, port: target.port, method: msg.method, path: msg.url.startsWith("/") ? msg.url : `/${msg.url}`, headers: msg.headers },
+      {
+        hostname: target.hostname,
+        port: target.port,
+        method,
+        path: url.startsWith("/") ? url : `/${url}`,
+        headers: requestHeaders(msg.headers, body?.length ?? 0, target.host),
+        agent: false, // one connection per request: nothing to desync
+      },
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
@@ -56,7 +88,7 @@ function forwardLocal(localUrl: string, msg: ForwardedRequest): Promise<{ status
     );
     req.on("error", reject);
     req.setTimeout(LOCAL_TIMEOUT_MS, () => req.destroy(new Error("local service timed out")));
-    req.end(msg.body ? Buffer.from(msg.body, "base64") : undefined);
+    req.end(body);
   });
 }
 
@@ -83,6 +115,7 @@ export function tunnelmoleProvider(endpoint = TUNNELMOLE_ENDPOINT): TunnelProvid
     available: () => typeof WebSocket === "function",
     start(localUrl, emit): ProviderSession {
       let closed = false;
+      let inflight = 0;
       const ws = new WebSocket(endpoint);
       const down = (reason: string) => {
         if (closed) return;
@@ -110,7 +143,21 @@ export function tunnelmoleProvider(endpoint = TUNNELMOLE_ENDPOINT): TunnelProvid
         if (url) {
           emit({ type: "ready", url });
         } else if (msg.type === "forwardedRequest") {
-          void forwardedResponse(localUrl, msg as unknown as ForwardedRequest).then((reply) => {
+          const fwd = msg as unknown as ForwardedRequest;
+          const tooBig = typeof fwd.body === "string" && fwd.body.length > MAX_BODY_B64;
+          if (tooBig || inflight >= MAX_INFLIGHT) {
+            const body = Buffer.from(tooBig ? "Payload too large" : "Busy");
+            const headers = { "content-type": "text/plain; charset=utf-8", "content-length": String(body.length) };
+            try {
+              ws.send(JSON.stringify({ type: "forwardedResponse", requestId: fwd.requestId, url: fwd.url, statusCode: tooBig ? 413 : 503, headers, body: body.toString("base64") }));
+            } catch {
+              // socket closed
+            }
+            return;
+          }
+          inflight++;
+          void forwardedResponse(localUrl, fwd).then((reply) => {
+            inflight--;
             if (closed) return;
             try {
               ws.send(JSON.stringify(reply));

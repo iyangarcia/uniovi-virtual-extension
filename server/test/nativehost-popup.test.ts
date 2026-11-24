@@ -77,3 +77,11 @@ test("URL change notification: once per change, never for the first URL or a URL
   }
   assert.equal(known, "https://c/mcp/t");
 });
+
+test("helper stopped while another process (Claude's npm run mcp) owns the bridge: stopped, so Iniciar shows", () => {
+  const v = deriveHelperView(native(false), bridge());
+  assert.deepEqual([v.state, v.running, v.controllable], ["stopped", false, true]);
+  assert.ok(v.detail);
+  // Even if that bridge reports a URL from an earlier run, the host's word wins.
+  assert.equal(deriveHelperView(native(false), bridge({ remoteUrl: URL })).state, "stopped");
+});

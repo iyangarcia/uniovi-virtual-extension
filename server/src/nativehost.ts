@@ -157,15 +157,31 @@ function isAlive(pid: number): boolean {
   }
 }
 
-/** Windows recycles pids: make sure a pid from the file still belongs to a node.exe before trusting it. */
-function isOurImage(pid: number): boolean {
+// Same default/override as remote.ts (not imported: the host must stay free of the MCP SDK).
+const remotePort = () => Number(process.env.UNIOVI_REMOTE_PORT) || 47824;
+
+/**
+ * Windows recycles pids, and Detener runs `taskkill /T /F`: only trust a pid from the file if that
+ * very process is LISTENING on the helper's remote port. The helper binds that port before writing
+ * its pid file, so a stale file whose pid now belongs to another node.exe (Claude Code, a dev
+ * server…) is never trusted or killed.
+ */
+export function listensOnPort(netstat: string, pid: number, port: number): boolean {
+  return netstat.split(/\r?\n/).some((line) => {
+    const cols = line.trim().split(/\s+/);
+    // Proto  Local Address  Foreign Address  State  PID. A listening socket has foreign 0.0.0.0:0
+    // (the State word is localized, so it is not compared).
+    return cols.length >= 5 && /^TCP$/i.test(cols[0]!) && cols[1] === `127.0.0.1:${port}` && cols[4] === String(pid) && cols[2] === "0.0.0.0:0";
+  });
+}
+
+function isOurHelper(pid: number): boolean {
   if (process.platform !== "win32") return true;
   try {
-    const out = execFileSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
-    const image = /^"([^"]+)"/.exec(out.trim())?.[1];
-    return !!image && image.toLowerCase() === basename(process.execPath).toLowerCase();
+    const out = execFileSync("netstat", ["-ano", "-p", "TCP"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+    return listensOnPort(out, pid, remotePort());
   } catch {
-    return true; // tasklist unavailable: fall back to the liveness check alone
+    return false; // can't prove it's ours: never kill it
   }
 }
 
@@ -184,7 +200,7 @@ function readPid(): number | undefined {
 function helperPid(): number | undefined {
   if (!existsSync(pidFile())) return undefined;
   const pid = readPid();
-  if (pid !== undefined && pid !== process.pid && isAlive(pid) && isOurImage(pid)) return pid;
+  if (pid !== undefined && pid !== process.pid && isAlive(pid) && isOurHelper(pid)) return pid;
   removePidFile(pid);
   return undefined;
 }

@@ -88,6 +88,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   send(res, 404, { error: "Not found" });
 }
 
+/** Shown when a port is in a Windows excluded range. */
+export const RESERVED_HINT = "Check with: netsh int ipv4 show excludedportrange protocol=tcp";
+
 // UNIOVI_BRIDGE_PORT: dev/test override so parallel runs do not fight over 47823 (the extension always uses 47823).
 export const BRIDGE_LISTEN_PORT = Number(process.env.UNIOVI_BRIDGE_PORT) || BRIDGE_PORT;
 
@@ -106,7 +109,10 @@ export function startHttp(port = BRIDGE_LISTEN_PORT): Promise<Server | null> {
         console.error(`[bridge] port ${port} in use; assuming another instance is ingesting`);
         resolvePromise(null);
       } else {
-        throw err;
+        // EACCES = port inside a Windows reserved range (Hyper-V/WSL). Degrade like "in use" instead of
+        // crashing the stdio MCP server or the helper.
+        console.error(`[bridge] cannot listen on ${port} (${err.code ?? err.message}); ingest disabled.${err.code === "EACCES" ? ` Reserved by Windows. ${RESERVED_HINT}` : ""}`);
+        resolvePromise(null);
       }
     });
     server.listen(port, "127.0.0.1", () => {

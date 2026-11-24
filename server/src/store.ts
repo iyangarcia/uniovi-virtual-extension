@@ -82,14 +82,24 @@ export function loadIndex(): Promise<Record<string, StoredFile>> {
   return readJson<Record<string, StoredFile>>(indexPath, {});
 }
 
-/** Windows-safe path segment. */
+/**
+ * Windows-safe path segment. Truncation happens BEFORE stripping trailing dots/spaces (Win32 drops
+ * them, so a folder ending in one can't be opened by Explorer or PowerShell) and by code point (no
+ * lone surrogate halves). Reserved device names (CON, NUL, COM1, nul.txt…) get a leading "_".
+ * Already-indexed files keep their stored path (storeFile reuses it); only new files use this.
+ */
 export function safeSegment(s: string, max = 80): string {
-  const cleaned = s
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
-    .replace(/\s+/g, " ")
-    .trim()
+  const cleaned = [
+    ...s
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ]
+    .slice(0, max)
+    .join("")
     .replace(/[. ]+$/, "");
-  return (cleaned || "_").slice(0, max);
+  if (!cleaned) return "_";
+  return /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(\.|$)/i.test(cleaned) ? `_${cleaned}`.slice(0, max) : cleaned;
 }
 
 // Serialise index writes: files arrive one by one but the extension may retry concurrently.

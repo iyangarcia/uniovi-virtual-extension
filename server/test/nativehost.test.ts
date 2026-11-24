@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import * as esbuild from "esbuild";
 import { EXTENSION_ID, EXTENSION_PUBLIC_KEY, type NativeReply } from "../../shared/helper.ts";
-import { encodeFrame, frameDecoder, hostManifest, MAX_MESSAGE_BYTES, parseRequest, validateDataDir } from "../src/nativehost.ts";
+import { encodeFrame, frameDecoder, hostManifest, listensOnPort, MAX_MESSAGE_BYTES, parseRequest, validateDataDir } from "../src/nativehost.ts";
 
 // ---------------------------------------------------------------- pure parts
 
@@ -91,7 +91,9 @@ const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify({ ok: true, version: "fake", dataDir: process.env.UNIOVI_DATA_DIR, knownFiles: {}, argv: process.argv.slice(2) }));
 });
-server.listen(Number(process.env.UNIOVI_BRIDGE_PORT), "127.0.0.1", () => fs.writeFileSync(path.join(process.env.UNIOVI_APP_DIR, "helper.pid"), String(process.pid)));
+// Like the real helper: bind the remote port (the host checks this pid listens there), then the bridge, then write the pid file.
+http.createServer((q, r) => r.end()).listen(Number(process.env.UNIOVI_REMOTE_PORT), "127.0.0.1", () =>
+  server.listen(Number(process.env.UNIOVI_BRIDGE_PORT), "127.0.0.1", () => fs.writeFileSync(path.join(process.env.UNIOVI_APP_DIR, "helper.pid"), String(process.pid))));
 `;
 
 const root = mkdtempSync(join(tmpdir(), "uniovi-host-test-"));
@@ -99,6 +101,7 @@ const appDir = join(root, "app");
 const installDir = join(root, "install");
 const spawned = new Set<number>();
 let port = 0;
+let rport = 0;
 
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
@@ -126,6 +129,7 @@ before(async () => {
   // Same as release/app: the real helper.js is ESM, so the folder carries {"type":"module"} (host must be .cjs).
   writeFileSync(join(installDir, "package.json"), JSON.stringify({ type: "module" }));
   port = await freePort();
+  rport = await freePort();
 });
 
 after(() => {
@@ -136,7 +140,7 @@ after(() => {
 /** A host process plus a framed request/reply helper, like Chrome's connectNative. */
 function startHost(): { child: ChildProcess; ask: (msg: unknown) => Promise<NativeReply>; askRaw: (frame: Buffer) => Promise<NativeReply> } {
   const child = spawn(process.execPath, [join(installDir, "host.cjs"), "chrome-extension://amagekgnbkaeigjhbenkilkhoklkdieo/", "--parent-window=0"], {
-    env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port) },
+    env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port), UNIOVI_REMOTE_PORT: String(rport) },
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stderr!.resume();
@@ -210,7 +214,7 @@ test("host --stop (installer / uninstaller): stops a running helper, then is a n
   const runStop = () =>
     new Promise<number | null>((resolve) => {
       const c = spawn(process.execPath, [join(installDir, "host.cjs"), "--stop"], {
-        env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port) },
+        env: { ...process.env, UNIOVI_APP_DIR: appDir, UNIOVI_DATA_DIR: join(root, "data"), UNIOVI_BRIDGE_PORT: String(port), UNIOVI_REMOTE_PORT: String(rport) },
         stdio: "ignore",
       });
       c.on("exit", resolve);
@@ -241,4 +245,17 @@ test("host over stdio: setDataDir while stopped, stale pid file, oversized messa
   head.writeUInt32LE(MAX_MESSAGE_BYTES + 1);
   assert.deepEqual(await askRaw(head), { ok: false, error: "mensaje demasiado grande" });
   assert.equal(await exited, 1);
+});
+
+test("a pid from helper.pid is trusted only if that process listens on the helper's remote port", () => {
+  const netstat = [
+    "  Proto  Dirección local          Dirección remota        Estado           PID",
+    "  TCP    127.0.0.1:47823          0.0.0.0:0              LISTENING       900",
+    "  TCP    127.0.0.1:47824          0.0.0.0:0              ESCUCHANDO      1234",
+    "  TCP    127.0.0.1:47824          127.0.0.1:50000        ESTABLISHED     777",
+  ].join("\r\n");
+  assert.equal(listensOnPort(netstat, 1234, 47824), true); // localized state word is fine
+  assert.equal(listensOnPort(netstat, 900, 47824), false); // a reused pid that is some other server
+  assert.equal(listensOnPort(netstat, 777, 47824), false); // a client connection is not ownership
+  assert.equal(listensOnPort(netstat, 1234, 47825), false);
 });

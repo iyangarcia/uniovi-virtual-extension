@@ -92,19 +92,27 @@ export async function runService(): Promise<void> {
     log.close();
     process.exit(0);
   }
-  writePidFile();
-  process.on("exit", () => removePidFile());
-
-  const http = await startHttp();
-  if (!http) console.error("[service] bridge port taken by another process; it serves ingest (same data files)");
-
+  // The remote port is the instance lock: bind it BEFORE writing the pid file or taking the bridge, so
+  // two helpers starting together (logon Run entry + popup Iniciar) can't leave the winner without
+  // ingest or without a pid file. The loser touches nothing and exits.
   const token = await remoteToken();
   if (!(await startRemote(token))) {
-    console.error(`[service] remote port ${REMOTE_PORT} in use (another helper or --remote run); exiting`);
-    http?.close();
-    removePidFile();
+    console.error(`[service] remote port ${REMOTE_PORT} unavailable (another helper / --remote run, or reserved by Windows); exiting`);
+    log.close();
     process.exit(0);
   }
+  writePidFile();
+  let tunnel: ServiceTunnel | undefined;
+  // Also on crashes (log.ts exits on uncaughtException): a surviving ssh child would keep the old
+  // public URL forwarding to whatever binds the remote port next. child.kill is synchronous.
+  process.on("exit", () => {
+    tunnel?.stop();
+    removePidFile();
+  });
+
+  const http = await startHttp();
+  if (!http) console.error("[service] bridge port taken by another process or reserved; ingest is served elsewhere or disabled");
+
   console.error(`[service] MCP endpoint on http://127.0.0.1:${REMOTE_PORT}/mcp/<token>`);
   // Web clients give up on a tool call after ~60 s; extracting a cold corpus takes longer, so index now.
   void loadIndex().then((index) => warmTextCache(Object.values(index)));
@@ -116,7 +124,6 @@ export async function runService(): Promise<void> {
     );
   };
 
-  let tunnel: ServiceTunnel | undefined;
   if (config.tunnel) {
     let last = "";
     tunnel = startServiceTunnel(`http://127.0.0.1:${REMOTE_PORT}`, (s) => {

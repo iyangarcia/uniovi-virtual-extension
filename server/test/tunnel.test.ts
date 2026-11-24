@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
@@ -7,7 +9,7 @@ import { TUNNEL_PROVIDERS, type TunnelProviderName, type TunnelStatus } from "..
 import { defaultProviders, startTunnel, type ProviderEvent, type TunnelProvider } from "../src/tunnel.ts";
 import { tunnelLogParser } from "../src/tunnel/cloudflared.ts";
 import { lineSplitter, runProcess } from "../src/tunnel/provider.ts";
-import { localhostRunParser, pinggyParser } from "../src/tunnel/ssh.ts";
+import { baseArgs, localhostRunParser, pinggyParser } from "../src/tunnel/ssh.ts";
 import { assignedUrl, forwardedResponse, type ForwardedRequest } from "../src/tunnel/tunnelmole.ts";
 
 // Real output captured on 2026-11-24 from this PC (public IP replaced by 203.0.113.7).
@@ -254,4 +256,47 @@ test("events from a stopped or abandoned session are ignored", async () => {
 test("default providers follow TUNNEL_PROVIDERS; UNIOVI_TUNNEL_PROVIDERS picks and orders them", () => {
   assert.deepEqual(defaultProviders({ env: {} }).map((p) => p.name), [...TUNNEL_PROVIDERS]);
   assert.deepEqual(defaultProviders({ env: { UNIOVI_TUNNEL_PROVIDERS: "pinggy, tunnelmole,nope" } }).map((p) => p.name), ["pinggy", "tunnelmole"]);
+});
+
+test("ssh sessions ignore the user's ssh config and never offer or forward keys", () => {
+  const args = baseArgs(mkdtempSync(join(tmpdir(), "uniovi-ssh-")), 443);
+  const opts = new Set<string>();
+  for (let i = 0; i < args.length; i++) if (args[i] === "-o") opts.add(args[i + 1]!);
+  assert.deepEqual(args.slice(0, 2), ["-F", "none"], "-F none must come first so ~/.ssh/config never applies");
+  for (const flag of ["-T", "-a", "-x"]) assert.ok(args.includes(flag), flag);
+  for (const o of ["PubkeyAuthentication=no", "IdentityAgent=none", "IdentitiesOnly=yes", "ControlMaster=no", "PermitLocalCommand=no", "StrictHostKeyChecking=accept-new"])
+    assert.ok(opts.has(o), o);
+  assert.ok([...opts].some((o) => o.startsWith("UserKnownHostsFile=") && !o.includes(".ssh")), "own known_hosts, not ~/.ssh");
+});
+
+test("tunnelmole forwarding can't smuggle a second request with a lying content-length", async () => {
+  const seen: string[] = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c: Buffer) => (body += c.toString()));
+    req.on("end", () => {
+      seen.push(`${req.method} ${req.url} host=${req.headers.host} body=${JSON.stringify(body)}`);
+      res.end("ok");
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const local = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const payload = "abcGET /smuggled HTTP/1.1\r\nHost: x\r\n\r\n";
+    const reply = await forwardedResponse(local, {
+      type: "forwardedRequest",
+      requestId: "r1",
+      url: "/mcp/t",
+      method: "POST",
+      headers: { "content-length": "3", "transfer-encoding": "identity", connection: "keep-alive", host: "evil.example" },
+      body: Buffer.from(payload).toString("base64"),
+    });
+    assert.equal(reply.statusCode, 200);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(seen.length, 1, seen.join(" | "));
+    assert.match(seen[0]!, /^POST \/mcp\/t host=127\.0\.0\.1:\d+ body=/);
+    assert.ok(seen[0]!.includes("smuggled"), "the whole body is delivered as the body of the one request");
+  } finally {
+    server.close();
+  }
 });

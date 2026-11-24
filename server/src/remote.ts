@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { RESERVED_HINT } from "./http.ts";
 import { createMcpServer } from "./mcp.ts";
 import { loadRemoteState, saveRemoteState } from "./store.ts";
 
@@ -93,7 +94,9 @@ export function startRemote(token: string, port = REMOTE_PORT): Promise<Server |
         console.error(`[remote] port ${port} in use; is another --remote instance running?`);
         resolvePromise(null);
       } else {
-        throw err;
+        // EACCES = port inside a Windows reserved range; never crash, the caller decides.
+        console.error(`[remote] cannot listen on ${port} (${err.code ?? err.message})${err.code === "EACCES" ? `: reserved by Windows. ${RESERVED_HINT}` : ""}`);
+        resolvePromise(null);
       }
     });
     server.listen(port, "127.0.0.1", () => resolvePromise(server));

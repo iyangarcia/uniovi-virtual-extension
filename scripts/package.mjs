@@ -11,6 +11,9 @@ import { join, resolve } from "node:path";
 
 // Same major as the Node used to develop and test the helper. Bump together with engines in package.json.
 const NODE_VERSION = "24.20.0";
+// Pinned: SHASUMS256.txt comes from the same server as the binary, so it only catches corruption.
+// Update both together when bumping Node (the hash is in that release's SHASUMS256.txt).
+const NODE_SHA256 = "5c976096e04e5c2c1f091938926234cc9fbebfe9787ddd149351b3b0ecc707b5";
 const NODE_DIST = `https://nodejs.org/dist/v${NODE_VERSION}`;
 const NODE_FILE = "win-x64/node.exe";
 
@@ -38,6 +41,7 @@ async function portableNode() {
   const line = readFileSync(sumsFile, "utf8").split("\n").find((l) => l.trim().endsWith(`  ${NODE_FILE}`));
   const expected = line?.split(/\s+/)[0];
   if (!expected || !/^[0-9a-f]{64}$/.test(expected)) throw new Error(`${NODE_FILE} not listed in ${sumsFile}`);
+  if (expected !== NODE_SHA256) throw new Error(`SHASUMS256.txt lists ${expected} for ${NODE_FILE}, but the pinned hash is ${NODE_SHA256}`);
 
   const exe = join(cacheDir, "node.exe");
   const sha = (buf) => createHash("sha256").update(buf).digest("hex");

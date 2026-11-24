@@ -40,7 +40,7 @@ docs/PRUEBAS-MANUALES.md, not here.
 - [x] CLAUDE.md + README updated (helper, providers, native host, packaging); start-remote.bat kept for developers or removed with a note
 
 ## 7. Gate
-- [ ] npm run typecheck, npm test and npm run build pass; all spawned helpers/tunnels stopped at the end
+- [x] npm run typecheck, npm test and npm run build pass; all spawned helpers/tunnels stopped at the end
 
 ## Log
 
@@ -109,3 +109,55 @@ Gate after the merges: `npm run typecheck && npm test && npm run build && npm ru
 - docs/PRUEBAS-MANUALES.md has a new §6 human checklist.
 - CLAUDE.md covers the package commands, service, config, providers, native host (host.cjs), the installer, and gotchas (reserved port ranges cause EACCES; `Start-Process -Wait` waits for the whole process tree).
 - README has a student intro. start-remote.bat is kept for developers, with cloudflared now optional.
+
+### 2026-11-24 review (one review agent over 08354a9..master) and fixes (coordinator)
+
+The reviewer confirmed or rated plausible 5 important issues, 2 minor ones, 1 pre-existing one and 5 nits. All are fixed except the ones noted at the end.
+
+**Important**
+1. **ssh tunnels read the user's ssh config, so ForwardAgent/LocalCommand/ProxyCommand could reach localhost.run or pinggy.**
+   - Fix: `baseArgs` now passes `-F none -a -x` plus `IdentityAgent=none`, `IdentitiesOnly=yes`, `ControlMaster=no` and `PermitLocalCommand=no`.
+   - Evidence: `ssh -G` with these args shows forwardagent no, forwardx11 no, identityagent none, permitlocalcommand no, controlmaster false. The test "ssh sessions ignore the user's ssh config…" passes, and the real localhost.run tunnel still connects (below).
+2. **The popup showed "Listo" with no Iniciar when Claude's `npm run mcp` owned 47823 and the helper was stopped.**
+   - Fix: when the host says the helper isn't running, the state is "stopped", with a detail line.
+   - Test: "helper stopped while another process … owns the bridge".
+3. **EACCES (a Windows reserved port) crashed the bridge/remote listeners.**
+   - Fix: both now log, with a netsh hint, and resolve null.
+4. **The host trusted a recycled pid (image name only) and could `taskkill /T /F` it.**
+   - Fix: a pid is trusted only if `netstat -ano` shows that pid LISTENING on 127.0.0.1:<remote port>. The match uses foreign address 0.0.0.0:0, so the localized state word doesn't matter. The test helper binds the remote port too.
+   - Test: "a pid from helper.pid is trusted only if…".
+   - Live check: a helper.pid naming the user's Claude MCP node.exe (pid 16364, listening on 47823) gave status running:false, the stale file was removed, and 16364 was still alive.
+5. **A start race could leave the winner without ingest or without a pid file.**
+   - Fix: the remote port is the instance lock, bound before the pid file and the bridge.
+   - Live check: two `node helper.js --service` started at once. The log has 2 "starting" lines, one "remote port 51824 unavailable … exiting", and the winner served everything.
+
+**Minor**
+6. **Tunnelmole forwarded request headers verbatim (request smuggling over keep-alive).**
+   - Fix: hop-by-hop, framing, host and expect headers are stripped, content-length comes from the decoded body, `agent:false` is set, the method and url are validated, at most 16 requests run at once (then 503), and the base64 body is capped at 8 MB (then 413).
+   - Test: "tunnelmole forwarding can't smuggle…".
+7. **A crashed helper left its ssh child alive.**
+   - Fix: `process.on("exit")` now stops the tunnel too.
+
+**Pre-existing**
+- **safeSegment:**
+  - It now truncates by code point first, then strips trailing dots and spaces, and prefixes "_" to device names.
+  - Test: "safeSegment: never ends in a space or dot…".
+  - Already-indexed files keep their old paths, because there is no migration. The real `…Expandir_ _ ` folder in ~/uniovi-data stays as it is.
+- **Collector (not fixed, out of scope):** the Onetopic section name includes the tab UI text ("Seleccionar sección … Colapsar … Expandir").
+
+**Nits**
+- **Fixed:**
+  - The node.exe sha256 is pinned in package.mjs.
+  - The popup probes the host every 10 s instead of every 2 s.
+  - The popup privacy text names localhost.run, tunnelmole and pinggy, and says the URL can contain the public IP.
+  - PRUEBAS-MANUALES has new checks for a profile path with a space or non-ASCII letter, and for Claude owning 47823 while the helper is stopped.
+- **Not fixed:** if a provider rotates its ssh host key, accept-new fails until `{app}\tunnel\known_hosts` is deleted. This is documented here.
+
+**Section 7, final gate.**
+- `npm run typecheck && npm test && npm run build && npm run package:helper && npm run package:host`: 105 pass, 0 fail.
+- Integrated re-check of the bundled helper from tmp\coord\run with `UNIOVI_TUNNEL_PROVIDERS=localhost.run,pinggy`:
+  - Ready via localhost.run (https://…lhr.life).
+  - The e2e MCP client got 10/10 PASS over the public URL.
+  - Host status returned running:true; stop returned running:false.
+  - The bridge went down, and there was no ssh.exe left.
+- All coordinator-spawned helpers, hosts and tunnels are stopped (tasklist/netstat).

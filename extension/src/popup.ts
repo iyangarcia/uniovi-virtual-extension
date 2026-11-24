@@ -62,7 +62,7 @@ function renderHelper(view: HelperView) {
     $<HTMLInputElement>("remoteUrl").value = view.url;
     shownUrl = view.url;
   }
-  $("tunnelProvider").textContent = view.provider ?? "tunnelmole, localhost.run o Cloudflare";
+  $("tunnelProvider").textContent = view.provider ?? "localhost.run, tunnelmole o pinggy";
 
   $("helperControls").hidden = !view.controllable;
   $<HTMLButtonElement>("helperStart").hidden = view.running;
@@ -127,8 +127,10 @@ function initHelper() {
     if (lastNative?.kind === "ok") dir.value = lastNative.status.dataDir;
   });
   // Poll while the popup is open, so connecting → ready (and new URLs) show up without reopening it.
+  // The bridge is polled every 2 s; the native host (a node.exe + netstat per probe) only every 10 s.
+  let tick = 0;
   setInterval(() => {
-    if (!busy) void refresh();
+    if (!busy) void refresh(++tick % 5 === 0 ? undefined : lastNative);
   }, 2000);
 }
 

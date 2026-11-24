@@ -47,6 +47,11 @@ export function deriveHelperView(native: NativeProbe, bridge: BridgeStatus | und
     return { ...base, state: "stopped", running: false };
   }
 
+  // The bridge on 47823 may belong to another process (Claude's `npm run mcp`), not to the helper.
+  // When the host can tell, trust it: otherwise Iniciar is hidden and the student can't get a URL.
+  if (native.kind === "ok" && !native.status.running)
+    return { ...base, state: "stopped", running: false, detail: "Hay un servidor local (p. ej. Claude) atendiendo, pero el asistente no está iniciado." };
+
   const running = true;
   const managed = native.kind === "ok" && native.status.running;
   const tunnel = bridge.tunnel;

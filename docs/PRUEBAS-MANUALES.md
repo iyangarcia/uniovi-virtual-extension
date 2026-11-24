@@ -78,6 +78,8 @@ Build with `npm run package` → `release/UnioviVirtual-Setup-<version>.exe`. St
 - [ ] Untick "Conector para IAs web" → helper restarts, no URL, local bridge still syncs. Tick it again → URL returns.
 - [ ] **Cambiar** the data folder to a new path → config saved, helper restarted, next sync writes there; an invalid path (`relative`, `\\server\x`) is refused with a Spanish message.
 - [ ] A helper started with **Iniciar** keeps running after closing **all** Chrome windows (Chrome's job object must not kill it); the URL still answers from the AI.
+- [ ] Windows user whose profile path has a space or a non-ASCII letter (e.g. `C:UsersJosé Luis`): install, Iniciar, tunnel reaches "Listo" (ssh known_hosts / askpass paths), uninstall.
+- [ ] With Claude Code/Desktop running (it owns port 47823) and the helper stopped: the popup shows "Detenido" with **Iniciar**, not "Listo"; Iniciar gives a URL.
 
 **Campus Wi-Fi** (eduroam / Uniovi on campus):
 - [ ] Which provider wins (popup / `logs\helper.log`), and how long until "Listo". Expected: localhost.run (22) or tunnelmole (8083) may be blocked → pinggy (443).

@@ -7,8 +7,8 @@ import { findExecutable, runProcess, type ProviderEvent, type TunnelProvider } f
 // no account). Both services hand out a random https URL and print it on the session's stdout.
 //   localhost.run  ssh -p 22 (it refuses 80/443)   URL: <id>.lhr.life, rotates now and then
 //   pinggy         ssh -p 443 (passes campus Wi-Fi) URL: <id>-<public ip>.<free domain>, session ends after 60 min
-// Host keys are trusted on first use into our own known_hosts (never the user's ~/.ssh), and
-// public-key auth is off so the user's own keys are never offered to these services.
+// Host keys are trusted on first use into our own known_hosts (never the user's ~/.ssh), the
+// user's ssh config is ignored, and no key or agent is ever offered or forwarded (see baseArgs).
 
 export interface SshOptions {
   /** Folder for known_hosts and the empty-password askpass helper. */
@@ -28,14 +28,26 @@ export function sshPath(env: NodeJS.ProcessEnv = process.env): string | null {
 
 const quote = (v: string) => (/\s/.test(v) ? `"${v}"` : v);
 
-function baseArgs(stateDir: string, port: number): string[] {
+/**
+ * Options shared by every tunnel session. `-F none` ignores the user's ~/.ssh/config and the system
+ * ssh_config: a `ForwardAgent yes`, ProxyCommand, LocalCommand or ControlMaster there must never
+ * apply to a session with a third-party tunnel server. No agent, no X11, no identities either.
+ */
+export function baseArgs(stateDir: string, port: number): string[] {
   mkdirSync(stateDir, { recursive: true });
   return [
+    "-F", "none",
     "-T",
+    "-a",
+    "-x",
     "-p", String(port),
     "-o", "StrictHostKeyChecking=accept-new",
     "-o", `UserKnownHostsFile=${quote(join(stateDir, "known_hosts"))}`,
     "-o", "PubkeyAuthentication=no",
+    "-o", "IdentityAgent=none",
+    "-o", "IdentitiesOnly=yes",
+    "-o", "ControlMaster=no",
+    "-o", "PermitLocalCommand=no",
     "-o", "ConnectTimeout=15",
     "-o", "ServerAliveInterval=20",
     "-o", "ServerAliveCountMax=3",

@@ -167,3 +167,17 @@ test("--service: serves /api/status, logs to a file, and a second start exits 0"
     await exited(first);
   }
 });
+
+test("safeSegment: never ends in a space or dot after truncation, keeps surrogate pairs, avoids device names", async () => {
+  const { safeSegment } = await import("../src/store.ts");
+  const cut = safeSegment(`${"a".repeat(79)} b`);
+  assert.ok(!/[. ]$/.test(cut), JSON.stringify(cut));
+  assert.ok(cut.length <= 80);
+  const emoji = safeSegment(`${"a".repeat(79)}😀x`);
+  assert.ok(!/[\ud800-\udbff]$/.test(emoji) && !/^[\udc00-\udfff]/.test(emoji), "no lone surrogate");
+  assert.equal(safeSegment("CON"), "_CON");
+  assert.equal(safeSegment("nul.txt"), "_nul.txt");
+  assert.equal(safeSegment("Console"), "Console");
+  assert.equal(safeSegment("Expandir_ _ "), "Expandir_ _");
+  assert.equal(safeSegment(" .. "), "_");
+});

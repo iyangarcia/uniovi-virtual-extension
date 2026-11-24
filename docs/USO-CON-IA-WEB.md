@@ -131,13 +131,13 @@ Todos los archivos que copió la extensión, ordenados por asignatura y tema, si
 ![Mis apuntes](img/mis-apuntes.png)
 
 - Ordena por nombre, fecha o asignatura, y filtra escribiendo en la caja.
-- **Buscar en mis apuntes** busca dentro del texto de los PDF y diapositivas.
+- **Buscar dentro de los apuntes** busca dentro del texto de los PDF y diapositivas.
 - Los archivos nuevos desde tu última visita llevan la marca **Nuevo**.
-- Al hacer clic, el PDF se abre en una pestaña nueva. Con **Abrir en ventana nueva** puedes poner dos PDF lado a lado (por ejemplo, los ejercicios y sus soluciones).
+- Al hacer clic, el PDF se abre en una pestaña nueva. Con **Ventana nueva** puedes poner dos PDF lado a lado (por ejemplo, los ejercicios y sus soluciones).
 - Word y PowerPoint no se pueden ver dentro de Chrome: usa **Descargar**.
 - Los archivos comprimidos (zip, rar…) no se copian; aparecen con un enlace al campus.
 
-![Buscar en mis apuntes](img/mis-apuntes-busqueda.png)
+![Buscar dentro de los apuntes](img/mis-apuntes-busqueda.png)
 
 ---
 
@@ -147,8 +147,10 @@ Todos los archivos que copió la extensión, ordenados por asignatura y tema, si
 
 Una frase te dice cómo va todo:
 
-- **✓ Tu IA puede ver tus apuntes**: todo bien.
-- **Abre el Campus para sincronizar**: entra en el campus una vez.
+- **✓ Tu IA ya puede ver tus apuntes**: todo bien.
+- **✓ Conectado** y «Abre el Campus Virtual para traer tus apuntes»: entra en el campus una vez.
+- **Sin conexión ahora mismo**: revisa tu Internet; la extensión vuelve a intentarlo sola.
+- **Apagado**: vuelve a encender **Conectar con mi IA**.
 
 Además:
 

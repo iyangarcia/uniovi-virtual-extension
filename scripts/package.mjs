@@ -5,14 +5,34 @@
 // The zip holds extension/dist (no source maps) under one folder, uniovi-virtual/, so Windows
 // "Extraer todo" gives a folder whose root has manifest.json: that is the folder to pick in
 // "Cargar descomprimida".
+//
+// It refuses to zip while RELAY_URL (shared/relay.ts) is still the placeholder: every student's link
+// would point at a relay that doesn't exist. Deploy the relay first (relay/DESPLIEGUE.md). For a
+// local test zip only: ALLOW_PLACEHOLDER_RELAY=1 npm run package.
 import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { zipSync } from "fflate";
+import { RELAY_URL } from "../shared/relay.ts";
 import { zipName } from "../shared/release.ts";
 
 const DIST = "extension/dist";
 const TOP = "uniovi-virtual";
+
+if (RELAY_URL.includes("example.workers.dev")) {
+  if (process.env.ALLOW_PLACEHOLDER_RELAY === "1") {
+    console.warn(`WARNING: RELAY_URL is still the placeholder (${RELAY_URL}). This zip is for local testing only: never publish it.`);
+  } else {
+    console.error(
+      [
+        `npm run package: RELAY_URL in shared/relay.ts is still the placeholder (${RELAY_URL}).`,
+        "Deploy the relay and put its URL there first: see relay/DESPLIEGUE.md.",
+        "For a local test zip only, run it with ALLOW_PLACEHOLDER_RELAY=1.",
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
+}
 
 // Start from an empty dist so files left by older builds never ship.
 await rm(DIST, { recursive: true, force: true });

@@ -162,6 +162,19 @@ export function decodeResponseBody(b64: string | undefined, max = MAX_RESPONSE_B
   return bytes.byteLength > max ? null : bytes;
 }
 
+/**
+ * The HTTP response for the AI client, or null when the agent's status/headers can't make one (e.g. a
+ * header value with a newline or a non-Latin-1 character makes `new Response` throw). Never throws.
+ */
+export function agentHttpResponse(res: RelayResponse, body: Uint8Array): Response | null {
+  const nullBody = res.status === 204 || res.status === 205 || res.status === 304;
+  try {
+    return new Response(nullBody ? null : (body as Uint8Array<ArrayBuffer>), { status: res.status, headers: res.headers });
+  } catch {
+    return null;
+  }
+}
+
 export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");

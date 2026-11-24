@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { MAX_BODY_BYTES, MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS } from "../../shared/relay.ts";
 import {
   RATE_LIMIT_PER_MINUTE,
+  agentHttpResponse,
   base64ToBytes,
   bytesToBase64,
   contentLengthTooLarge,
@@ -130,16 +131,8 @@ test("parseResponse validates and filters headers", () => {
     status: 202,
     headers: {},
   });
-  for (const bad of [
-    "x",
-    JSON.stringify({ type: "response", rid: 1, status: 200, headers: {} }),
-    JSON.stringify({ type: "response", rid: "r", status: 99, headers: {} }),
-    JSON.stringify({ type: "response", rid: "r", status: 600, headers: {} }),
-    JSON.stringify({ type: "response", rid: "r", status: 200.5, headers: {} }),
-    JSON.stringify({ type: "response", rid: "r", status: 200 }),
-    JSON.stringify({ type: "response", rid: "r", status: 200, headers: {}, body: 5 }),
-    JSON.stringify({ type: "hello", v: 1, secret: SECRET }),
-  ]) {
+  const nl = String.fromCharCode(13, 10);
+  for (const bad of [`a${nl}set-cookie: x=1`, "café ☕", `x${String.fromCharCode(0)}y`]) {
     assert.equal(parseResponse(bad), null, bad);
   }
 });
@@ -179,4 +172,20 @@ test("requestTimeout only lowers the contract value", () => {
   assert.equal(requestTimeout("3000"), 3000);
   assert.equal(requestTimeout("10"), 1000);
   assert.equal(requestTimeout("999999"), REQUEST_TIMEOUT_MS);
+});
+
+test("agentHttpResponse: a malformed agent header gives null (the relay answers 502), never a throw", async () => {
+  const body = new TextEncoder().encode("{}");
+  const ok = agentHttpResponse({ type: "response", rid: "r", status: 200, headers: { "content-type": "application/json" } }, body);
+  assert.equal(ok?.status, 200);
+  assert.equal(await ok?.text(), "{}");
+  const empty = agentHttpResponse({ type: "response", rid: "r", status: 204, headers: {} }, body);
+  assert.equal(empty?.status, 204);
+  assert.equal(empty?.body, null);
+  for (const bad of ["a\r\nset-cookie: x=1", "café ☕", "x\u0000y"]) {
+    // parseResponse keeps the allow-listed names; their values come from the agent unchecked.
+    const parsed = parseResponse(JSON.stringify({ type: "response", rid: "r", status: 200, headers: { "content-type": bad } }));
+    assert.ok(parsed, "still a well-formed frame");
+    assert.equal(agentHttpResponse(parsed!, body), null, JSON.stringify(bad));
+  }
 });

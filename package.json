@@ -1,6 +1,6 @@
 {
-  "name": "uniovi-virtual-claude",
-  "version": "0.1.0",
+  "name": "uniovi-virtual",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Chrome extension that gives your AI (claude.ai, ChatGPT, Claude Code) access to Uniovi Virtual (Moodle) materials, forum announcements, exam dates and deadlines.",

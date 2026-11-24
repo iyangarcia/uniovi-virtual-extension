@@ -24,7 +24,7 @@ export const fold = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu,
 export class UserError extends Error {}
 
 export const NO_DATA =
-  "No Uniovi Virtual data synced yet. Open Uniovi Virtual in Chrome (logged in) with the extension installed and click 'Sync now' in the extension popup.";
+  "No Uniovi Virtual data synced yet. Open Uniovi Virtual (campusvirtual.uniovi.es) in Chrome, logged in, with the extension installed: it syncs on its own. Or click «Sincronizar ahora» in the extension popup.";
 
 export async function requireSnapshot(store: DataStore): Promise<Snapshot> {
   const s = await store.snapshot();

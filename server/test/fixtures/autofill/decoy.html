@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Settings - Claude, with decoys (fixture)</title></head>
+<body>
+<!-- claude.html plus controls that also read "Add" / "Create" but belong to something else. Auto-fill
+     must never press them (engine.ts unsafe()): a submit button, a button inside a form, one inside an
+     open dialog that has a field, and one inside a card that has a field. They sit before the real
+     "Add" in document order, so a matcher that ignored them would pick one first. -->
+<div role="dialog" aria-label="Add to project">
+  <h2>Add to project</h2>
+  <label>Project name<input name="project" data-decoy></label>
+  <button class="decoy">Add</button>
+</div>
+<form onsubmit="return false"><input placeholder="Invite by email"><button class="decoy" type="button">Add</button></form>
+<button class="decoy" type="submit">Add</button>
+<div class="card"><input placeholder="Note title"><button class="decoy">Create</button></div>
+<div id="app"></div>
+<script src="common.js"></script>
+<script>
+window.__decoyClicks = 0;
+for (const b of document.querySelectorAll(".decoy")) b.addEventListener("click", () => window.__decoyClicks++);
+later(900, () => {
+  app.innerHTML = `
+    <h1>Connectors</h1>
+    <button id="addBtn" aria-haspopup="menu">Add</button>
+    <div id="menu" role="menu" hidden>
+      <div role="menuitem" tabindex="0" id="customItem">Add custom connector</div>
+    </div>`;
+  addBtn.onclick = () => (menu.hidden = false);
+  customItem.onclick = () => later(400, () => {
+    menu.hidden = true;
+    const d = document.createElement("div");
+    d.setAttribute("role", "dialog");
+    d.innerHTML = `
+      <h2>Add custom connector</h2>
+      <div><label for="n1">Name</label><input id="n1" data-field="name" type="text"></div>
+      <div><label for="u1">Remote MCP server URL</label><input id="u1" data-field="url" type="text"></div>
+      <button>Cancel</button><button data-confirm disabled>Add</button>`;
+    document.body.append(d);
+    bindForm(d);
+  });
+});
+</script>
+</body></html>

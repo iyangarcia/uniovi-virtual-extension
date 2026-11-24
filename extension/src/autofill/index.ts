@@ -40,6 +40,16 @@ function waitForComplete(tabId: number, timeoutMs: number): Promise<void> {
  */
 export async function autoConnect(spec: AutofillSpec, connectorUrl: string, permission: Promise<boolean>, startUrl = spec.startUrl): Promise<AutoConnectOutcome> {
   if (!(await permission.catch(() => false))) return { ok: false, reason: "permission" };
+  try {
+    return await openAndFill(spec, connectorUrl, startUrl);
+  } finally {
+    // The AI site permission is needed only for this one fill: give it back at once. Dev fixtures
+    // (devAutofillUrls) never asked for it.
+    if (startUrl === spec.startUrl) await chrome.permissions.remove({ origins: [spec.origin] }).catch(() => undefined);
+  }
+}
+
+async function openAndFill(spec: AutofillSpec, connectorUrl: string, startUrl: string): Promise<AutoConnectOutcome> {
   let tabId: number | undefined;
   try {
     const tab = await chrome.tabs.create({ url: startUrl, active: true });

@@ -31,6 +31,18 @@ export function randomB64url(bytes: number, getRandomValues = (a: Uint8Array) =>
 export const newToken = () => randomB64url(16);
 export const newIdentity = (): AgentIdentity => ({ id: randomB64url(16), secret: randomB64url(32), token: newToken() });
 
+/** "Cambiar enlace": a new id (a new Durable Object on the relay) and a new token; same secret. */
+export const rotatedIdentity = (current: AgentIdentity): AgentIdentity => ({ id: randomB64url(16), secret: current.secret, token: newToken() });
+
+/**
+ * Does a change of the stored identity need a new relay connection? Yes when the id changed
+ * ("Cambiar enlace"); not for the first identity being created (startAgent is connecting with it).
+ */
+export const idChanged = (prev: unknown, next: unknown): boolean => isValidIdentity(prev) && isValidIdentity(next) && prev.id !== next.id;
+
+/** The background keeps one connection per key; a new id or secret means a new connection. */
+export const connectionKey = (wsBase: string, identity: AgentIdentity) => `${wsBase}/agent/${identity.id}|${identity.secret}`;
+
 export function isValidIdentity(x: unknown): x is AgentIdentity {
   const i = x as Partial<AgentIdentity> | null;
   return !!i && typeof i === "object" && ID_RE.test(i.id ?? "") && SECRET_RE.test(i.secret ?? "") && TOKEN_RE.test(i.token ?? "");

@@ -16,6 +16,10 @@ const ok = (data: unknown): ToolResult => ({
 });
 const fail = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
 
+/** Every tool only reads the student's own synced data. Clients such as Gemini use these hints to
+ *  decide whether to ask before each call. */
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+
 function wrap<A>(fn: (args: A) => Promise<ToolResult>) {
   return async (args: A): Promise<ToolResult> => {
     try {
@@ -51,6 +55,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "sync_status",
     {
       title: "Sync status",
+      annotations: READ_ONLY,
       description:
         "When Uniovi Virtual was last synced, how much data is available, and any collection warnings. Call this first if results look incomplete or stale.",
       inputSchema: {},
@@ -80,7 +85,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
 
   server.registerTool(
     "list_courses",
-    { title: "List courses", description: "Courses the student is enrolled in, with material/post counts.", inputSchema: {} },
+    { title: "List courses", annotations: READ_ONLY, description: "Courses the student is enrolled in, with material/post counts.", inputSchema: {} },
     wrap(async () => {
       const s = await requireSnapshot();
       return ok(
@@ -100,6 +105,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "list_materials",
     {
       title: "List course materials",
+      annotations: READ_ONLY,
       description:
         "Files, slides, lecture notes and links published in courses. Returns each item's `key` (use with read_material) and, if downloaded, its absolute local path.",
       inputSchema: {
@@ -140,6 +146,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "read_material",
     {
       title: "Read course material",
+      annotations: READ_ONLY,
       description:
         "Extracts the text of a downloaded file (PDF, PPTX, DOCX, plain text). Pages/slides are marked with '--- page N ---'. Long documents are paginated by characters: pass the returned nextOffset to continue.",
       inputSchema: {
@@ -157,6 +164,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "search_materials",
     {
       title: "Search inside course materials",
+      annotations: READ_ONLY,
       description:
         "Full-text search inside downloaded PDFs, slides and documents. Returns matching snippets with the page/slide they are on. First search over many files can take a while (text is cached afterwards).",
       inputSchema: {
@@ -180,6 +188,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "get_deadlines",
     {
       title: "Upcoming deadlines",
+      annotations: READ_ONLY,
       description:
         "Assignment due dates and calendar events (submissions, quizzes, course events), sorted by date, in Europe/Madrid time.",
       inputSchema: {
@@ -231,6 +240,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "get_exam_dates",
     {
       title: "Exam dates",
+      annotations: READ_ONLY,
       description:
         "Exam dates found in calendar events and in forum announcements (detected heuristically from Spanish text, e.g. 'el examen final será el 15 de enero a las 10:00'). Each forum-derived date includes the snippet and post link: confirm by reading the snippet, as detection can over-report.",
       inputSchema: {
@@ -278,6 +288,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "search_forums",
     {
       title: "Search forum posts",
+      annotations: READ_ONLY,
       description:
         "Forum posts (announcements/news and discussion forums). Without a query, returns the latest posts. Returns excerpts; use get_forum_post for the full text.",
       inputSchema: {
@@ -318,6 +329,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     "get_forum_post",
     {
       title: "Read forum post",
+      annotations: READ_ONLY,
       description: "Full text of a forum post plus the rest of its discussion thread.",
       inputSchema: { id: z.number().int().describe("Post id from search_forums.") },
     },
@@ -401,10 +413,10 @@ function registerSearchFetch(server: McpServer, store: DataStore) {
     "search",
     {
       title: "Search everything",
+      annotations: READ_ONLY,
       description:
         "Searches the student's Uniovi course materials (text of PDFs/slides/documents) and forum posts. Returns {results:[{id,title,url}]}; pass an id to fetch for the full text.",
       inputSchema: { query: z.string().min(2).describe("Words to search for (accent-insensitive).") },
-      annotations: { readOnlyHint: true },
     },
     wrap(async ({ query }: { query: string }) => {
       const results = await searchAll(store, await requireSnapshot(), query);
@@ -416,9 +428,9 @@ function registerSearchFetch(server: McpServer, store: DataStore) {
     "fetch",
     {
       title: "Fetch a search result",
+      annotations: READ_ONLY,
       description: "Full text of a material or forum thread returned by search, as {id,title,text,url,metadata}.",
       inputSchema: { id: z.string().describe("An id from search, e.g. 'material:...' or 'post:123'.") },
-      annotations: { readOnlyHint: true },
     },
     wrap(async ({ id }: { id: string }) => ok(await fetchById(store, await requireSnapshot(), id))),
   );

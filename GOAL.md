@@ -23,8 +23,8 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [ ] relay/DESPLIEGUE.md: account, `npx wrangler login`, `npx wrangler deploy`, put the URL in shared/relay.ts, free-plan limits
 
 ## 2. Shared MCP core
-- [ ] Tools, prompts, instructions and text extraction moved to shared/mcp/ over DataStore; no node: imports there
-- [ ] Node server uses it (server/src/store.ts implements DataStore); all existing MCP/search tests pass unchanged in behaviour; new tests run the core against an in-memory DataStore
+- [x] Tools, prompts, instructions and text extraction moved to shared/mcp/ over DataStore; no node: imports there
+- [x] Node server uses it (server/src/store.ts implements DataStore); all existing MCP/search tests pass unchanged in behaviour; new tests run the core against an in-memory DataStore
 
 ## 3. Extension serves MCP
 - [ ] IndexedDB DataStore in the extension; ingest stores snapshot + files there (bridge POST kept as optional extra when a local server answers); knownFiles from IndexedDB; only readable types are downloaded (pdf, office, text/code, images); archives/exe skipped and listed as campus links
@@ -62,3 +62,8 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
   - Gemini app: "Add a custom app" by MCP URL (Settings → Connected Apps / gemini.google.com/customize/connectors), Streamable HTTP only, reportedly limited to US adults with personal accounts and English — likely unavailable to Spanish students for now. The welcome card must say so.
 - Contracts: `shared/relay.ts` (protocol v1, URL shape `/mcp/<id>/<token>`, hello+secret hash, ping/pong auto-response, limits 8 MB / 16 in flight / 60 s, header allow-lists, Spanish 503 body) and `shared/mcp/store.ts` (DataStore + StoredFile).
 - Backup: `git tag v0.1.0-instalador ab0dbc6` (local). Pushing the tag and attaching `UnioviVirtual-Setup-0.1.0.exe` to a release is a user step (PRUEBAS-MANUALES).
+
+### Section 2, shared MCP core (agent B, re-checked by coordinator)
+- `shared/mcp/{common,extract,search,server}.ts` hold the tools, prompts, instructions, extraction and the structured `searchMaterials`, behind `DataStore`. There are no `node:` imports (`grep -n "node:" shared/mcp` is empty), and the per-store state lives in WeakMaps. `server/src/store.ts` exports `nodeStore`; `server/src/{mcp,extract}.ts` are thin wrappers that keep their old signatures.
+- Re-run in the worktree, then after merging into master: `npm run typecheck` is clean (extension DOM libs + server Node libs both compile shared/mcp); `npm test` 110 pass, 0 fail (105 old tests unchanged, plus 5 in `mcp-core.test.ts` against an in-memory store: kindOf, textOf caching, structured search, cold-budget search, and an InMemoryTransport round trip that lists 11 tools and 3 prompts, with remote mode hiding localPath/dataDir); `npm run build` OK.
+- Agent smoke check: the built stdio server (temp data/app dir, bridge 48911) lists the same 11 tools in the same order, then exits when stdin closes.

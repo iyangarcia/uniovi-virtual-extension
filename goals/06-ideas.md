@@ -48,8 +48,10 @@ To do:
   with "Create new" and the "MCP Server URL" field.
 - Replace "puede que no esté disponible en España" with the real steps, plus pictures in
   `docs/USO-CON-IA-WEB.md`.
-- Still to find out: whether the connector stays after Gemini is reopened, and whether it works in ordinary
-  chats outside the Developer Mode workspace. Until then, keep recommending Claude (free) first.
+- Checked on 2026-11-25: once added, it **does** appear in ordinary Gemini chats (type `@Uniovi Virtual`).
+  Gemini then asks permission per tool. All tools are now marked read-only (`6fc7c50`); still to check whether
+  that stops the prompts, or whether students must answer "Permitir siempre" once per tool. Keep recommending
+  Claude (free) first.
 
 ## 3. Publish on the Chrome Web Store (likely the next goal)
 

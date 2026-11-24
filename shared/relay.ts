@@ -40,7 +40,7 @@
 //  - Tests point the extension at a local relay with chrome.storage.local.devRelayUrl (dev only).
 
 /** Set after `npx wrangler deploy` (see relay/DESPLIEGUE.md). No trailing slash. */
-export const RELAY_URL = "https://uniovi-relay.example.workers.dev";
+export const RELAY_URL = "https://uniovi-relay.iyangarcias.workers.dev";
 export const RELAY_WS_URL = RELAY_URL.replace(/^http/, "ws");
 
 export const RELAY_PROTOCOL = 1;

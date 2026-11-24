@@ -48,8 +48,8 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [x] CLAUDE.md and README describe the new architecture
 
 ## 7. Review + gate
-- [ ] One review agent over the whole goal diff (bugs, fixes, simplifications); what holds up is fixed with tests
-- [ ] typecheck, test, build, package and relay tests pass; every process started (wrangler, Chrome for Testing) is stopped
+- [x] One review agent over the whole goal diff (bugs, fixes, simplifications); what holds up is fixed with tests
+- [x] typecheck, test, build, package and relay tests pass; every process started (wrangler, Chrome for Testing) is stopped
 
 ## Log
 
@@ -138,3 +138,41 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
   - `docs/index.html` is the Pages download page: Descargar → `releases/latest/download/uniovi-virtual.zip`, 3 steps with real Spanish `chrome://extensions` screenshots, "¿Qué IA puedo usar?", privacy, updates and an FAQ.
   - `docs/USO-CON-IA-WEB.md`, `docs/PRUEBAS-MANUALES.md`, CLAUDE.md and README were rewritten. The coordinator corrected the Mis apuntes viewer note in CLAUDE.md.
 - **Not verified (manual):** auto-fill on the real claude.ai/chatgpt.com/gemini (start URLs and selectors come from web notes); the real `chrome.permissions.request` prompt; the toolbar popup; GitHub Pages rendering; Edge. `paso3-extension-cargada.png` still shows the old name "Uniovi Virtual → Claude" and should be retaken (`tmp/pptr/g5f-shots.mjs`).
+
+### Section 7: review and gate
+- **Review agent** (read-only, over `ab0dbc6..master`) reported 4 important, 12 minor and nit, 5 simplification findings and 3 test gaps, with a list of what it checked and found correct (relay security, agent, MCP-core parity, IndexedDB, viewer rendering, update check, zip layout). Two fix agents then worked in parallel worktrees:
+  - **Ingest/bridge/Mis apuntes (`b2c672c`):**
+    - Archives inside folders and sections now appear as campus links.
+    - Oversize files: decided from content-length or a capped stream read, the body is cancelled and the file recorded as skipped (pure `download.ts` with tests). They are no longer re-downloaded on every page load.
+    - **The dev bridge is off unless `chrome.storage.local.devBridge === true`.** Students' data no longer goes to anything on 127.0.0.1:47823. This also closes off the 2026-11-24 incident.
+    - A folder file with a new revision URL is downloaded again.
+    - The Mis apuntes search uses cached text only (`shared/mcp/scan.ts`): files.js went from 2.4 MB to 31 KB.
+    - `safeCampusUrl` only accepts campus hosts.
+    - The server `mcp.ts`/`extract.ts` lost their test-only wrappers and the dead code.
+  - **Agent/UI/relay/docs (`b9b78e7`):**
+    - `agent/identity.ts`: popup.js 1.1 MB → 19 KB, welcome.js 1.1 MB → 30 KB.
+    - "Cambiar enlace" now rotates **id and token** (same secret), so a revoked link reaches nothing. The worker reconnects to the new id and recovers from `rejected`.
+    - The AI-site permission is removed after auto-fill.
+    - Auto-fill never clicks submit buttons, anything in a form, or anything in a dialog/card that has an input (decoy fixture: 0 wrong clicks).
+    - Pings no longer write storage, and welcome re-renders only on its own keys.
+    - The "AI connected" count ignores wrong-token requests.
+    - The relay answers 502 instead of hanging on a bad agent header.
+    - `npm run package` refuses the placeholder `RELAY_URL` (escape hatch: `ALLOW_PLACEHOLDER_RELAY=1`).
+    - Docs labels match the UI. package.json is "uniovi-virtual" 0.2.0.
+  - **Coordinator:** fixed the two CLAUDE.md lines about the bridge and set `server/src/version.ts` to 0.2.0.
+- **Not fixed, noted:**
+  - The relay secret lives in `chrome.storage.local`, readable by campus content scripts (hardening nit).
+  - There is no automated Durable Object test; it would need Miniflare/vitest-pool-workers. The behaviour is covered by the 27-check `wrangler dev` e2e.
+  - Changes to `view.php` and section files go unnoticed, because their URL has no revision.
+  - Dev-only storage keys are still read in the shipped build.
+- **Final gate on master** (coordinator):
+  - `npm run typecheck` clean (extension, server, relay); `npm test` **117 pass / 0 fail**; `npm run build` OK.
+  - `npm run package` fails on the placeholder as intended. `ALLOW_PLACEHOLDER_RELAY=1 npm run package` gives `uniovi-virtual-0.2.0.zip` (0.92 MB).
+  - Browser checks on master's build, with the bridge blocked or off:
+    - UX: **37/37**.
+    - Mis apuntes: **51/51**.
+    - Integrated (real `wrangler dev` relay ↔ extension): **13/13** with **MCP 10/10**.
+  - Relay e2e: **27 PASS, "All checks passed"**.
+  - wrangler/workerd and every Chrome for Testing were stopped (0 left).
+  - `~/uniovi-data` was untouched (343 files; the snapshot comes back at the next real sync).
+  - The fix worktrees were removed after unlinking their junctions.

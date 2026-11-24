@@ -1,14 +1,12 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import type { TunnelStatus } from "../../shared/helper.ts";
 import type { DataStore, StoredFile } from "../../shared/mcp/store.ts";
 import type { Resource, Snapshot } from "../../shared/types.ts";
-import { effectiveDataDir } from "./config.ts";
 
-// On-disk layout. dataDir: UNIOVI_DATA_DIR env > config.json dataDir > existing ~/uniovi-data >
-// ~/Documents/Uniovi (see config.ts). Read once at startup: changing it means restarting the helper.
+// On-disk layout of the dev server (Claude Code). dataDir: UNIOVI_DATA_DIR or ~/uniovi-data, read once at startup.
 //   snapshot.json        latest Snapshot pushed by the extension
 //   files-index.json     resource key -> StoredFile
 //   files/<course>/<section>/<filename>
@@ -17,7 +15,7 @@ import { effectiveDataDir } from "./config.ts";
 // StoredFile.path is relative to dataDir, forward slashes.
 export type { StoredFile };
 
-export const dataDir = resolve(effectiveDataDir());
+export const dataDir = resolve(process.env.UNIOVI_DATA_DIR || join(homedir(), "uniovi-data"));
 
 const snapshotPath = join(dataDir, "snapshot.json");
 const indexPath = join(dataDir, "files-index.json");
@@ -25,9 +23,8 @@ const indexPath = join(dataDir, "files-index.json");
 let tmpSeq = 0;
 const writeChains = new Map<string, Promise<unknown>>();
 
-// Concurrent writes of one file (e.g. the tunnel's onDown and the shutdown handler both clearing
-// remote.json) used to share one tmp name, so one of the renames failed with ENOENT. Writes to
-// the same path are now serialised in-process, tmp names are unique, and a rename that loses a
+// Concurrent writes of one file (e.g. two snapshot POSTs racing) used to share one tmp name, so one
+// of the renames failed with ENOENT. Writes to the same path are now serialised in-process, tmp names are unique, and a rename that loses a
 // race with another process on Windows (EPERM/EACCES/EBUSY) is retried briefly.
 function writeAtomic(path: string, data: string | Uint8Array): Promise<void> {
   const run = async () => {
@@ -169,51 +166,3 @@ export const nodeStore: DataStore = {
   localPath: absolutePath,
   dataDir,
 };
-
-// ---------------------------------------------------------------- remote connector state
-// remote.json holds the secret token of the public MCP URL and, while `--remote` / `--service`
-// runs, the current tunnel URL and state, so /api/status can show them in the popup even when
-// another process serves the bridge.
-
-export interface RemoteState {
-  token: string;
-  /** Full connector URL (https://…/mcp/<token>) while a tunnel is up. */
-  publicUrl?: string;
-  /** pid of the `--remote` / `--service` process that owns publicUrl and tunnel. */
-  pid?: number;
-  /** Tunnel state written by the owning process (`--service` keeps it current). */
-  tunnel?: TunnelStatus;
-}
-
-const remotePath = join(dataDir, "remote.json");
-
-export function loadRemoteState(): Promise<RemoteState | null> {
-  return readJson<RemoteState | null>(remotePath, null);
-}
-
-export async function saveRemoteState(s: RemoteState) {
-  await writeAtomic(remotePath, JSON.stringify(s, null, 1));
-}
-
-export function pidAlive(pid: number | undefined): boolean {
-  if (!pid || !Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    // EPERM: the process exists but belongs to someone else.
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
-/** URL and tunnel state published by the remote/service process, if that process is still alive. */
-export async function liveRemote(): Promise<{ remoteUrl?: string; tunnel?: TunnelStatus }> {
-  const s = await loadRemoteState();
-  if (!s?.pid || !pidAlive(s.pid)) return {};
-  return { remoteUrl: s.publicUrl, tunnel: s.tunnel };
-}
-
-/** The connector URL, if the process that published it is still alive. */
-export async function liveRemoteUrl(): Promise<string | undefined> {
-  return (await liveRemote()).remoteUrl;
-}

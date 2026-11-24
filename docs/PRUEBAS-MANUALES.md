@@ -1,101 +1,120 @@
-# Manual test checklist
+# Manual test checklist (maintainer)
 
-Things automated tests can't cover: real Chrome, the real campus, real AI chats, and whether the answers are actually *useful*.
-Tick as you go. For each failure, note **what you did, what you expected, what happened**, and the `sync_status` warnings.
+Things automated tests can't cover: the real relay, real Chrome, the real campus, real AI chats, a real
+non-technical student, and whether the answers are actually *useful*. Tick as you go. For each failure, note
+**what you did, what you expected, what happened**, and the `sync_status` warnings.
 
-Setup once: `npm install && npm run build`, load `extension/dist` unpacked in `chrome://extensions`, log in to Uniovi Virtual.
+Never test against a public relay with fixture data that looks real, and never point a test helper or
+test profile at your real campus data except in the checks below that are about the real campus.
 
-## 1. Extension and sync
+## 0. Release (once per version)
+
+**First time only:**
+- [ ] Deploy the relay: follow [relay/DESPLIEGUE.md](../relay/DESPLIEGUE.md) (Cloudflare account, `npx wrangler login`, `npx wrangler deploy`). `curl https://<relay>/` answers `Uniovi Virtual relay`.
+- [ ] Put that URL in `RELAY_URL` in `shared/relay.ts` (no trailing slash). Never change it afterwards: every student's pasted link depends on it.
+- [ ] Make the GitHub repository **public** (Settings → General → Danger Zone → Change visibility). Pages and the unauthenticated releases API (the update check) need it.
+- [ ] Enable GitHub Pages: Settings → Pages → Source "Deploy from a branch", branch `master`, folder `/docs`. After a minute, <https://iyangarcia.github.io/uniovi-virtual-extension/> shows the download page with its pictures.
+- [ ] Push the installer backup tag: `git push origin v0.1.0-instalador`. Optionally create a release on that tag and attach the old `UnioviVirtual-Setup-0.1.0.exe` (rebuild it with `git checkout v0.1.0-instalador && npm ci && npm run package` if you no longer have it; mark it as not latest).
+
+**Each version:**
+- [ ] Bump `version` in `extension/manifest.json`. Do **not** touch the manifest `key` (the ID, and with it the students' stored files and links, depends on it).
+- [ ] `npm run typecheck && npm test && npm run build && npm run package`. This writes `release/uniovi-virtual-<version>.zip` and `release/uniovi-virtual.zip` (same bytes).
+- [ ] Create a GitHub Release with tag `v<version>` and attach **both** zips. It must be marked *latest*: the download button points at `releases/latest/download/uniovi-virtual.zip`, and the extension's daily update check reads `releases/latest`.
+- [ ] Click **Descargar** on the Pages site: the new zip downloads.
+
+## 1. A fresh student (the real test)
+
+On a Windows PC that has never had the extension, on **campus Wi-Fi** (eduroam / Uniovi). Ideally a non-technical friend does it while you **watch without helping**; write down every place they hesitate.
+
+- [ ] Starting from the Pages URL only, they download, extract to Documentos, enable Modo Desarrollador, Cargar descomprimida, pick the folder. Note the time taken and any step where they got stuck (the native folder picker and nested `uniovi-virtual\uniovi-virtual` are the likely spots).
+- [ ] The welcome page opens by itself. Its first check is ✓.
+- [ ] They log in to the campus; the "Entra en el Campus Virtual" step turns ✓ after the first sync. Note the time.
+- [ ] They connect an AI using only the welcome page.
+- [ ] They ask "¿qué exámenes tengo esta semana?" and get a correct answer.
+- [ ] No "Errores" button on the extension card in `chrome://extensions` after the first sync (a red Errores button scares students).
+
+## 2. Each AI answers
+
+For **claude.ai** (free plan), **ChatGPT** (Plus) and **Gemini** (if the option exists for a Spanish account; otherwise note plan/country and that it was missing):
+
+- [ ] The connector is added with the student's link, no authentication, and lists about 11 tools.
+- [ ] "¿Qué exámenes tengo esta semana?" Matches the campus calendar and announcements. Forum dates are quoted with a link. Record client, plan, the tool calls and the result.
+- [ ] "Busca en mis apuntes dónde se explica <a concept you know>." Right file and page/slide.
+- [ ] "Explícame el tema N de <asignatura> y hazme un mini test." Uses that course's material and cites (file, page).
+- [ ] A long PDF (100+ pages) is read in chunks (nextOffset) without the client cutting it off.
+- [ ] Something not in the data: it says it doesn't know instead of inventing.
+- [ ] No answer shows a local path or the data folder.
+
+## 3. Auto-fill
+
+On the real sites, logged in:
+
+- [ ] claude.ai: **Conectar automáticamente** asks for the claude.ai permission only at click time, opens the connector page and fills name + URL. Only the AI's own confirm button is left. Confirm → it works in a chat.
+- [ ] chatgpt.com: the same, on a Plus account.
+- [ ] Gemini: the card says it is probably not available; if a form exists, try it.
+- [ ] Deny the permission, or break a selector on purpose (edit the selector file, rebuild): it falls back to Copiar with a note.
+- [ ] Installing the extension showed no extra permission warning for the AI sites.
+
+## 4. Chrome closed
+
+- [ ] Close every Chrome window (and check Task Manager: no `chrome.exe` left). Ask the AI something: it shows the Spanish "Uniovi Virtual no está conectado: abre Chrome…" message, not a generic error.
+- [ ] Open Chrome (without opening the campus). Within about a minute the same question works.
+- [ ] Turn off **Conectar con mi IA** in the popup: the AI gets the same message. Turn it on: it works again.
+- [ ] Laptop suspended for an hour, then resumed: it reconnects by itself.
+
+## 5. Update v1 → v2
+
+With a real install that has synced and has a connected AI:
+
+- [ ] Note the link (Copiar enlace) and the file count in Mis apuntes.
+- [ ] Publish v2 (section 0). Within a day (or after reloading the extension), the popup and welcome page show "Hay una versión nueva".
+- [ ] Follow the 2 pictured steps: extract over the same `Documentos\uniovi-virtual` (Reemplazar), press ⟳ in `chrome://extensions`.
+- [ ] The version is v2; the extension ID is still `amagekgnbkaeigjhbenkilkhoklkdieo`; the link is unchanged; Mis apuntes shows the same files; the AI still answers without re-pasting.
+
+## 6. Mis apuntes
+
+- [ ] Opens from the popup and from the campus panel. Courses → sections → files match the campus.
+- [ ] Sort by name, date and course; the filter box narrows the list; text search finds a phrase inside a PDF.
+- [ ] "Nuevo" marks appear for files since the last visit and clear after it.
+- [ ] Open two PDFs (e.g. exercises and solutions) with **Abrir en ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
+- [ ] A .docx / .pptx offers **Descargar** and saves one copy. A zip shows as a campus link.
+
+## 7. Sync on the real campus
 
 - [ ] After reloading the extension and the campus tab, the dashboard panel appears on `/my/` and nowhere else.
-- [ ] "Sync now" in the popup: the status shows progress and finishes without error. Badge and status text update.
-- [ ] `sync_status` (Claude Code, or a web chat once connected) shows the right course count and a recent `lastSync`. Read every warning and confirm it's expected (disabled WS functions only).
-- [ ] Courses: every course you're enrolled in this term appears. With the "All (incl. past)" setting, past courses appear too.
-- [ ] Materials: open 2–3 courses on the campus and compare with `list_materials`. Check folders, PDFs, slides, and links (links have no download).
-- [ ] Files land in `~/uniovi-data/files/<curso>/<sección>/`. Open a couple and check they're not HTML login pages.
-- [ ] Second sync is incremental: noticeably faster, and doesn't re-upload unchanged files.
-- [ ] Notifications: a new announcement (or one you mark unseen) triggers a notification only if "Notify me" is on.
-- [ ] Sync with Claude and the bridge closed. Open Claude later: within about a minute the data arrives (`bridge-flush`).
+- [ ] `sync_status` shows the right course count and a recent `lastSync`. Read every warning; only disabled WS functions are expected.
+- [ ] Every course you're enrolled in this term appears.
+- [ ] Materials: compare 2–3 courses on the campus with Mis apuntes / `list_materials` (folders, PDFs, slides, links).
+- [ ] Downloaded files open and are not HTML login pages (the real redirect path is not covered by tests).
+- [ ] A second sync is incremental: noticeably faster, no re-download of unchanged files.
+- [ ] Notifications: a new important announcement triggers one notification when "Notify me" is on.
 
-## 2. Remote connector (start-remote, developers)
-
-- [ ] `start-remote.bat` prints a URL ending in `/mcp/<token>` within about 30 s (providers in order: localhost.run, tunnelmole, pinggy, cloudflared if installed).
-- [ ] Popup shows "Usar con ChatGPT / Gemini / Claude web" with the same URL. **Copiar** copies it and the button says "Copiada ✓".
-- [ ] Opening the URL root (`https://<tunnel host>/`) in a browser gives "Not found". The URL with one character changed also gives "Not found".
-- [ ] Close the window: the popup section disappears (reopen the popup). Restart: a new URL appears.
-- [ ] `start-remote.bat --rotate-token`: the URL path changes, and the old full URL no longer works in the chat.
-
-## 3. Each AI client
-
-Do this block for **claude.ai**, **ChatGPT** (developer mode) and **Gemini** (custom app), wherever your account allows it.
-
-- [ ] The connector can be added with "no authentication" and shows the tool list (about 11 tools, including `search` and `fetch`).
-- [ ] "¿Qué entregas y exámenes tengo en las próximas dos semanas?" Compare against the campus calendar. No invented dates, and forum-detected dates are marked as such, with a link.
-- [ ] "¿Ha habido avisos nuevos esta semana en los foros?" Matches what you see on the campus.
-- [ ] "Busca en mis apuntes dónde se explica <un concepto que sepas en qué tema está>." The right file and a page/slide number.
-- [ ] "Explícame el tema N de <asignatura> y hazme un mini test." Uses that course's slides and cites (file, page). It waits for your answers before correcting.
-- [ ] "Prepárame el próximo examen de <asignatura>." The date, format and covered topics match the announcement. The plan runs up to the exam date.
-- [ ] Long PDF (100+ pages): it reads in chunks (nextOffset) without the client cutting it off or erroring.
-- [ ] Ask about something not in your data ("¿cuándo es el examen de una asignatura que no tengo?"). It says it doesn't know instead of inventing.
-- [ ] Answers come in Spanish by default.
-- [ ] No answer exposes a local path (`C:\Users\…`) or the data folder.
-
-## 4. Efficiency (time it)
+## 8. Efficiency (time it)
 
 | Check | Target | Measured |
 |---|---|---|
+| Install, from Pages to extension card (non-technical person) | < 5 min | |
 | Full first sync, all in-progress courses | < 5 min | |
 | Incremental sync | < 1 min | |
 | `get_deadlines` / `search_forums` reply in chat | a few seconds | |
-| First `search` / `search_materials` over all files (cold text cache) | < 30 s | |
-| Same search again (warm cache) | < 3 s | |
+| First `search_materials` over all files (cold text cache) | < 30 s | |
+| Same search again | < 3 s | |
 | `read_material` of a 100-page PDF, first call | < 15 s | |
-| Number of tool calls the AI needs for "mi semana" | ≤ 5 | |
+| Tool calls the AI needs for "mi semana" | ≤ 5 | |
 
-Also watch: is the PC's CPU or fan busy while start-remote is idle? (It shouldn't be.) Does `~/uniovi-data` grow unreasonably after several syncs?
+Also watch: Chrome's CPU while idle with the AI connection on (Task Manager → Chrome's own task manager, Shift+Esc), and how much the extension stores after several syncs.
 
-## 5. Privacy and safety
+## 9. Privacy and safety
 
-- [ ] Nothing in the chats or the window log shows your campus password or session cookie.
-- [ ] With start-remote closed, the connector fails in the chat (no access).
-- [ ] The extension never posts or submits anything on the campus (read-only).
+- [ ] Nothing in the chats shows the campus password or session cookie.
+- [ ] Cambiar enlace: the old link gives 404 in the AI; the new one works.
+- [ ] The extension never posts or submits anything on the campus.
+- [ ] Cloudflare dashboard → the Worker: logs/observability are off; the Durable Object stores only the secret hash.
 
-## 6. Installer, helper and tunnels (goal 04)
+## 10. Claude Code (developers)
 
-Build with `npm run package` → `release/UnioviVirtual-Setup-<version>.exe`. Student guide: `docs/USO-CON-IA-WEB.md`.
-
-**Fresh Windows user** (a new local account with no Node, no dev tools):
-- [ ] Download the Setup.exe through a browser. SmartScreen shows "Windows protegió su PC"; **Más información → Ejecutar de todas formas** works. No UAC/admin prompt.
-- [ ] Wizard is in Spanish; the info page explains loading the extension. Finish with both boxes ticked: the extension folder opens, and no console window appears (Task Manager shows `node.exe` under the user, no `conhost`/Terminal window).
-- [ ] Load `%LOCALAPPDATA%\UnioviVirtual\extension` unpacked. Its ID is `amagekgnbkaeigjhbenkilkhoklkdieo`.
-- [ ] Log in to the campus; first sync completes. Data lands in `Documents\Uniovi` (no `~/uniovi-data` on a fresh user).
-
-**Popup states** (click through each; note what the popup says):
-- [ ] Not installed: on a PC/profile without the installer → "no instalado" message, panel and notifications still work.
-- [ ] Stopped: **Detener** → state "Detenido", `/api/status` no longer answers, no `node.exe`/`ssh.exe` left.
-- [ ] Connecting → Ready: **Iniciar** → "Conectando…" then "Listo" with a URL; note the time to ready and the provider shown.
-- [ ] Error: disconnect the network while starting → "Error" with a readable reason; reconnect → recovers alone.
-- [ ] Untick "Conector para IAs web" → helper restarts, no URL, local bridge still syncs. Tick it again → URL returns.
-- [ ] **Cambiar** the data folder to a new path → config saved, helper restarted, next sync writes there; an invalid path (`relative`, `\\server\x`) is refused with a Spanish message.
-- [ ] A helper started with **Iniciar** keeps running after closing **all** Chrome windows (Chrome's job object must not kill it); the URL still answers from the AI.
-- [ ] Windows user whose profile path has a space or a non-ASCII letter (e.g. `C:UsersJosé Luis`): install, Iniciar, tunnel reaches "Listo" (ssh known_hosts / askpass paths), uninstall.
-- [ ] With Claude Code/Desktop running (it owns port 47823) and the helper stopped: the popup shows "Detenido" with **Iniciar**, not "Listo"; Iniciar gives a URL.
-
-**Campus Wi-Fi** (eduroam / Uniovi on campus):
-- [ ] Which provider wins (popup / `logs\helper.log`), and how long until "Listo". Expected: localhost.run (22) or tunnelmole (8083) may be blocked → pinggy (443).
-- [ ] If pinggy: after ~60 min the URL changes, the notification appears once, and pasting the new URL works.
-
-**Each AI** (claude.ai, ChatGPT developer mode, Gemini where the account allows custom MCP connectors; note plan):
-- [ ] Paste the URL with no authentication; tools are listed.
-- [ ] "¿Qué exámenes tengo esta semana?" — answer matches the campus calendar and announcements, forum dates quoted with link. Record client, plan, tool calls and result. (If Gemini offers no custom connector option, write down the plan/country.)
-
-**Reboot → URL change:**
-- [ ] Reboot and log in: the helper starts by itself (Run value `UnioviVirtual`), with no window. Within a minute the popup shows "Listo".
-- [ ] The URL differs from before the reboot → one notification "pega la nueva URL en tu IA"; clicking/copying and editing the connector restores access. The old URL gives 404 / no answer.
-
-**Uninstall:**
-- [ ] *Configuración → Aplicaciones → Uniovi Virtual → Desinstalar*: the running helper and its tunnel client are stopped first; `%LOCALAPPDATA%\UnioviVirtual` is gone; no `es.uniovi.virtual` key under `HKCU\Software\Google\Chrome\NativeMessagingHosts` / `Microsoft\Edge\...`; no `UnioviVirtual` Run value. The data folder is untouched.
-- [ ] After uninstall, the popup says "no instalado" and the panel still works.
+- [ ] `npm run build`, then `claude` in the repo: `.mcp.json` starts `server/dist/index.js`; the tools work against `~/uniovi-data`, filled by the extension's optional bridge POST while the server runs.
+- [ ] `npm run serve` keeps the bridge up while Claude is closed.
 
 ## Reporting
 

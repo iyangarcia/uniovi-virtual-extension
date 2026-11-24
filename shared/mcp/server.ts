@@ -34,7 +34,7 @@ const courseArg = z
   .describe("Course id, short name, or part of the course name (accent-insensitive). Omit for all courses.");
 
 export interface McpOptions {
-  /** Served to a web client (ChatGPT, Gemini, claude.ai) over a tunnel: hide local paths, which are useless there and reveal the user's folders. */
+  /** Served to a web client (ChatGPT, claude.ai) through the relay: hide local paths, which are useless there and reveal the user's folders. */
   remote?: boolean;
   /** Server version reported to clients (default "0.0.0"). */
   version?: string;

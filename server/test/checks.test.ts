@@ -1,21 +1,19 @@
 // Tests added by the mutation audit (goals/03-verify-checks.md): each one kills a mutation of
-// remote.ts / mcp.ts / http.ts that the original suite let through.
+// mcp.ts / http.ts that the original suite let through.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import http, { type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, mock, test } from "node:test";
+import { after, before, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { BridgeStatus, Snapshot } from "../../shared/types.ts";
 
 // store.ts reads UNIOVI_DATA_DIR at import time, so point it at a temp dir before importing the server.
 process.env.UNIOVI_DATA_DIR = mkdtempSync(join(tmpdir(), "uniovi-checks-test-"));
 const store = await import("../src/store.ts");
-const remote = await import("../src/remote.ts");
 const mcp = await import("../src/mcp.ts");
 const bridge = await import("../src/http.ts");
 
@@ -56,91 +54,6 @@ async function inMemoryClient(remoteMode: boolean) {
   await client.connect(b);
   return client;
 }
-
-// ---------------------------------------------------------------- remote.ts
-
-test("tokenMatches rejects prefixes, extensions and paths that merely contain /mcp/<token>", () => {
-  const token = remote.newToken();
-  assert.equal(remote.tokenMatches(`/mcp/${token}`, token), true);
-  assert.equal(remote.tokenMatches(`/mcp/${token.slice(0, -1)}`, token), false);
-  assert.equal(remote.tokenMatches(`/mcp/${token.slice(0, 1)}`, token), false);
-  assert.equal(remote.tokenMatches(`/mcp/${token}A`, token), false);
-  assert.equal(remote.tokenMatches(`/x/mcp/${token}`, token), false);
-  assert.equal(remote.tokenMatches(`/mcp/${token}/extra`, token), false);
-});
-
-async function startRemote() {
-  const token = remote.newToken();
-  const server = (await remote.startRemote(token, 0))!;
-  const addr = server.address() as AddressInfo;
-  return { server, token, addr, url: `http://127.0.0.1:${addr.port}/mcp/${token}` };
-}
-
-const mcpPost = (body: string) => ({
-  method: "POST",
-  headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
-  body,
-});
-
-test("remote endpoint listens on loopback only (the tunnel is the only way in)", async () => {
-  const { server, addr } = await startRemote();
-  try {
-    assert.equal(addr.address, "127.0.0.1");
-  } finally {
-    server.close();
-  }
-});
-
-test("remote endpoint: oversized body → 413, malformed JSON → 400", async () => {
-  const { server, url } = await startRemote();
-  try {
-    const big = await fetch(url, mcpPost(JSON.stringify({ pad: "x".repeat(1024 * 1024 + 10) }))).catch((e: Error) => e);
-    // The server may answer 413 or cut the upload short; either way it must not be processed.
-    if (big instanceof Error) assert.ok(big, "connection reset while uploading is acceptable");
-    else assert.equal(big.status, 413);
-    const bad = await fetch(url, mcpPost("{not json"));
-    assert.equal(bad.status, 400);
-  } finally {
-    server.close();
-  }
-});
-
-test("remote endpoint rate-limits to 240 requests per minute, then recovers", async () => {
-  mock.timers.enable({ apis: ["Date"], now: Date.now() });
-  const { server, url } = await startRemote();
-  try {
-    const statuses: number[] = [];
-    for (let i = 0; i < 241; i++) {
-      const res = await fetch(url, { method: "DELETE" });
-      await res.arrayBuffer();
-      statuses.push(res.status);
-    }
-    assert.ok(statuses.slice(0, 240).every((s) => s !== 429), "first 240 are served");
-    assert.equal(statuses[240], 429);
-    mock.timers.tick(61_000);
-    const later = await fetch(url, { method: "DELETE" });
-    await later.arrayBuffer();
-    assert.notEqual(later.status, 429, "a new minute resets the window");
-  } finally {
-    mock.timers.reset();
-    server.close();
-  }
-});
-
-test("remote endpoint serves the tools in remote mode (no dataDir / localPath)", async () => {
-  const { server, url } = await startRemote();
-  const client = new Client({ name: "test", version: "0" });
-  try {
-    await client.connect(new StreamableHTTPClientTransport(new URL(url)));
-    assert.doesNotMatch(text(await client.callTool({ name: "sync_status", arguments: {} })), /dataDir/);
-    assert.doesNotMatch(text(await client.callTool({ name: "list_materials", arguments: {} })), /localPath/);
-  } finally {
-    // Close everything even when an assertion fails, so a regression fails fast instead of hanging `npm test`.
-    await client.close().catch(() => {});
-    server.closeAllConnections();
-    server.close();
-  }
-});
 
 // ---------------------------------------------------------------- mcp.ts remote mode
 
@@ -266,18 +179,12 @@ test("bridge: only chrome-extension:// origins, pinned when UNIOVI_EXTENSION_ID 
   }
 });
 
-test("bridge: /api/status reports remoteUrl only while the --remote process is alive", async () => {
-  const token = remote.newToken();
-  const status = async () => (await request("GET", "/api/status", { Host: "127.0.0.1" })).json as BridgeStatus;
-  await store.saveRemoteState({ token, publicUrl: `https://a-b.trycloudflare.com/mcp/${token}`, pid: process.pid });
-  assert.equal((await status()).remoteUrl, `https://a-b.trycloudflare.com/mcp/${token}`);
-  await store.saveRemoteState({ token, publicUrl: `https://a-b.trycloudflare.com/mcp/${token}`, pid: 2 ** 22 + 12345 });
-  assert.equal((await status()).remoteUrl, undefined);
-  await store.saveRemoteState({ token });
-  const s = await status();
+test("bridge: /api/status reports the last sync and the stored files", async () => {
+  const s = (await request("GET", "/api/status", { Host: "127.0.0.1" })).json as BridgeStatus;
   assert.equal(s.ok, true);
-  assert.equal(s.remoteUrl, undefined);
   assert.equal(s.lastSync, snap.syncedAt);
+  assert.deepEqual(Object.keys(s.knownFiles).sort(), ["5:/apuntes.txt", "6:/datos.bin"]);
+  assert.equal("remoteUrl" in s, false);
 });
 
 test("bridge: rejects a POST that is not a snapshot", async () => {

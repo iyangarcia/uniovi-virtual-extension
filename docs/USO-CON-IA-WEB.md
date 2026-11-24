@@ -1,113 +1,210 @@
-# Usar Uniovi Virtual con Claude, ChatGPT o Gemini
+# Uniovi Virtual con tu IA: guía paso a paso
 
-Con esto, tu chat de IA puede **consultar tu campus**: buscar dentro de las diapositivas y PDFs de todas tus asignaturas (te dice la página), ver tus entregas y exámenes ordenados por fecha, leer los avisos de los foros y detectar fechas de examen anunciadas allí. La IA ve siempre lo último que hayas sincronizado y busca en todo a la vez, sin que tengas que subir archivos a mano.
+Con esta extensión de Chrome, tu IA (Claude o ChatGPT) puede **consultar tu Campus Virtual**:
 
-```
-Uniovi Virtual ──(extensión de Chrome)──► tu PC (asistente) ──(túnel https)──► Claude / ChatGPT / Gemini
-```
+- buscar dentro de las diapositivas y PDFs de todas tus asignaturas (y decirte la página);
+- ver tus entregas y exámenes ordenados por fecha;
+- leer los avisos de los foros y encontrar las fechas de examen que anuncian los profesores.
 
-Tus archivos se quedan **en tu ordenador**. No hay ningún servidor central ni cuentas nuevas: solo la de la IA que ya uses.
+No hay que instalar ningún programa: **solo la extensión**. Tus archivos se guardan dentro de Chrome, en tu ordenador.
 
-Requisitos: Windows 10/11 y Google Chrome (o Edge). No hacen falta permisos de administrador.
+Página de descarga: <https://iyangarcia.github.io/uniovi-virtual-extension/>
 
-## 1. Instalar (una vez)
+---
 
-1. Descarga `UnioviVirtual-Setup-<versión>.exe` y ábrelo.
-2. Es probable que Windows muestre **"Windows protegió su PC"** (SmartScreen), porque el instalador no está firmado. Pulsa **Más información → Ejecutar de todas formas**.
-3. Sigue el asistente. Al final deja marcadas **"Iniciar el asistente ahora"** y **"Abrir la carpeta de la extensión"**.
+## 1. Instalar (una vez, 3 minutos)
 
-El instalador pone todo en `%LOCALAPPDATA%\UnioviVirtual` y hace que el **asistente** (un pequeño programa sin ventanas) se inicie solo cada vez que entras en Windows.
+**Necesitas:** un ordenador con Google Chrome.
 
-## 2. Cargar la extensión en Chrome (una vez)
+### Paso 1. Descarga y descomprime
 
-1. Escribe `chrome://extensions` en la barra de direcciones.
-2. Activa **Modo de desarrollador** (arriba a la derecha).
-3. Pulsa **Cargar descomprimida** y elige la carpeta `%LOCALAPPDATA%\UnioviVirtual\extension` (la que abrió el instalador).
-4. Fija la extensión con el icono del puzle para tenerla a mano.
+1. En la página de descarga, pulsa **Descargar**. Se guarda `uniovi-virtual.zip` en tu carpeta **Descargas**.
+2. Haz clic derecho en el zip y elige **Extraer todo…**
+3. Pulsa **Examinar…**, elige **Documentos** y pulsa **Extraer**.
 
-Chrome puede recordarte de vez en cuando que tienes extensiones en modo desarrollador; es normal.
+![Clic derecho, Extraer todo, destino Documentos](img/paso1-extraer.png)
 
-## 3. Primera sincronización
+Ahora tienes la carpeta `Documentos\uniovi-virtual`. **No la borres ni la muevas**: Chrome la usa mientras la extensión esté instalada.
 
-Entra en [Uniovi Virtual](https://campusvirtual.uniovi.es) con tu usuario de siempre. La extensión sincroniza sola (tarda unos segundos la primera vez, algo más si tienes muchos archivos). También puedes pulsar **Sync now** en su ventanita.
+### Paso 2. Modo desarrollador
 
-La extensión **nunca** ve tu contraseña: usa la sesión que ya tienes abierta en el navegador.
+1. Abre Chrome, escribe `chrome://extensions` en la barra de direcciones y pulsa Intro.
+2. Arriba a la derecha, activa **Modo Desarrollador**.
 
-## 4. La ventanita de la extensión
+![Interruptor Modo Desarrollador](img/paso2-modo-desarrollador.png)
 
-En el apartado **Usar con ChatGPT / Gemini / Claude web** verás el estado del asistente:
+3. Pulsa **Cargar descomprimida**.
 
-| Estado | Qué significa | Qué hacer |
+![Botón Cargar descomprimida](img/paso2-cargar-descomprimida.png)
+
+### Paso 3. Elige la carpeta
+
+1. Se abre una ventana para elegir una carpeta. Ve a **Documentos**.
+2. Haz **un solo clic** en `uniovi-virtual` y pulsa **Seleccionar carpeta**.
+
+Aparece **Uniovi Virtual** en la lista:
+
+![La extensión ya cargada](img/paso3-extension-cargada.png)
+
+Y se abre la **página de bienvenida**, que te guía con lo que falta:
+
+![Página de bienvenida](img/welcome.png)
+
+> Consejo: pulsa el icono del puzle 🧩 (arriba a la derecha de Chrome) y luego la chincheta junto a Uniovi Virtual. Así tendrás su botón siempre a mano.
+
+---
+
+## 2. Sincronizar con el campus
+
+1. Entra en el [Campus Virtual](https://campusvirtual.uniovi.es) como siempre, con tu usuario y contraseña.
+2. La extensión se pone a copiar tus asignaturas, apuntes, avisos y fechas. La primera vez tarda unos minutos si tienes muchos archivos. **Deja la pestaña del campus abierta** mientras tanto.
+3. En la página de bienvenida, el paso «Entra en el Campus Virtual» se marca con ✓ cuando termina.
+
+Después se actualiza sola cada vez que abres el campus (si han pasado unas horas desde la última vez).
+
+La extensión **nunca ve tu contraseña**: usa la sesión que ya tienes abierta en Chrome. Y solo lee: no entrega tareas, no escribe en foros, no cambia nada del campus.
+
+En tu **Área personal** del campus verás además un panel con tus próximos exámenes y entregas, y lo nuevo desde tu última visita.
+
+---
+
+## 3. Conectar tu IA (una vez)
+
+Tu IA se conecta con un **enlace personal** que crea la extensión. Solo hay que pegarlo una vez: el enlace no cambia.
+
+| IA | ¿Funciona? | Qué necesitas |
 |---|---|---|
-| Asistente no instalado | Chrome no encuentra el asistente | Ejecuta el instalador otra vez |
-| Asistente detenido | Instalado pero apagado | Pulsa **Iniciar** |
-| Conectando… | Abriendo el túnel (hasta un minuto) | Espera |
-| Listo | Hay una URL del conector | Pulsa **Copiar URL del conector** |
-| Error | Ningún túnel ha funcionado (sigue reintentando) | Mira "Problemas frecuentes" |
+| **Claude** (claude.ai) | Sí, gratis | Una cuenta gratuita. El plan gratis permite 1 conector, justo el que necesitas. **Recomendado.** |
+| **ChatGPT** | Sí, de pago | Plan Plus o superior. El plan gratuito no permite añadir conectores. |
+| **Gemini** | Probablemente aún no | De momento no parece estar disponible en España. |
 
-También puedes **Detener** el asistente, desactivar el conector para IAs web, o **Cambiar** la carpeta de datos (los archivos ya descargados no se mueven).
+### Forma fácil: «Conectar automáticamente»
 
-## 5. Añadir el conector a tu IA
+1. Abre la página de bienvenida (o el botón de la extensión → **Cómo conectarla**).
+2. En la tarjeta de tu IA, pulsa **Conectar automáticamente**.
+3. Chrome te pide permiso para esa página (claude.ai o chatgpt.com). Pulsa **Permitir**.
+4. Se abre la página de conectores de tu IA con el nombre y el enlace **ya escritos**.
+5. Revisa y pulsa el botón de confirmar de la propia IA (por ejemplo, **Añadir**).
 
-Copia la URL (termina en `/mcp/…`) y pégala como **conector personalizado**. Solo hay que hacerlo una vez, salvo que la URL cambie (ver más abajo). Los menús cambian a menudo; si no encuentras la opción, busca "conectores" o "MCP" en la ayuda de tu IA.
+Si algo no sale bien, la extensión te lo dice y puedes usar la forma manual.
 
-### Claude (claude.ai)
-*Settings → Connectors → Add custom connector*. Nombre: "Uniovi Virtual". Pega la URL y guarda. En un chat nuevo, actívalo desde el botón de herramientas. Según tu plan, el número de conectores personalizados puede estar limitado.
+### Forma manual: copiar y pegar
 
-### ChatGPT
-*Settings → Apps & Connectors → Advanced → Developer mode*: actívalo. Después pulsa *Create*: nombre "Uniovi Virtual", pega la URL en *MCP Server URL*, elige **No authentication** y marca que confías en la aplicación. En el chat, pulsa **+ → Developer mode** y elige el conector.
-Según tu plan, el modo desarrollador puede no estar disponible (oficialmente Business/Enterprise/Edu; algunos planes Plus/Pro lo tienen en modo solo lectura, que es suficiente porque todo esto es de solo lectura).
+1. Pulsa el botón de la extensión y luego **Copiar enlace**.
+2. Pégalo en tu IA como **conector personalizado**:
 
-### Gemini
-Siendo sinceros: la app de Gemini **solo** admite conectores MCP personalizados en algunos planes y países, y Google lo está desplegando poco a poco. Si en *Settings* ves algo como *Connected apps → Add custom app*, pega ahí la URL. Si no aparece, tu cuenta todavía no lo permite; usa Claude o ChatGPT.
+**Claude (claude.ai)**
+1. Menú de tu cuenta → **Personalizar** (*Customize*) → **Conectores** (*Connectors*).
+2. **Añadir** → **Añadir conector personalizado** (*Add custom connector*).
+3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Pulsa **Añadir**.
+4. En un chat nuevo, comprueba que Uniovi Virtual está activado en el menú de herramientas.
 
-## 6. Cuando la URL cambia
+En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro, tendrás que quitarlo para añadir este.
 
-La URL pública **puede cambiar**: al reiniciar el PC, al cambiar de red o si se corta el túnel. Cuando pase, la extensión te mostrará un aviso ("pega la nueva URL en tu IA"). Entonces:
+**ChatGPT (Plus o superior)**
+1. Ve a <https://chatgpt.com/plugins> y pulsa **+**.
+2. Elige **Añadir servidor MCP personalizado** (*Add custom MCP server*).
+3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Sin autenticación (*No authentication*). Guarda.
+4. En el chat, elige Uniovi Virtual en el menú **+**.
 
-1. Abre la ventanita de la extensión y pulsa **Copiar URL del conector**.
-2. En tu IA, **edita** el conector "Uniovi Virtual" (o bórralo y créalo de nuevo) y pega la URL nueva.
+Los menús de las IAs cambian a menudo. Si no encuentras la opción, busca «conectores» o «MCP» en la ayuda de tu IA.
 
-En algunas redes (por ejemplo, Wi-Fi que bloquea casi todos los puertos) solo funciona un proveedor de túnel cuyas sesiones gratuitas duran **60 minutos**: en ese caso la URL cambia cada hora y tendrás que repetir estos pasos. En casa suele durar mucho más.
+---
 
-## 7. Qué pedirle
+## 4. Qué preguntarle
 
-- "¿Qué exámenes tengo esta semana?"
-- "¿Qué entregas y exámenes tengo en las próximas dos semanas?"
-- "Prepárame el próximo examen de Física: fecha, qué entra, plan de estudio y preguntas de práctica."
-- "Explícame el tema 3 de Cálculo con las diapositivas de la asignatura y hazme un mini test."
-- "Busca en mis apuntes dónde se explica la ley de Ohm."
-- "¿Ha habido avisos nuevos en los foros esta semana?"
+- «¿Qué exámenes tengo esta semana?»
+- «¿Qué entregas y exámenes tengo en las próximas dos semanas?»
+- «Prepárame el próximo examen de Derecho Civil: fecha, qué entra, plan de estudio y preguntas de práctica.»
+- «Explícame el tema 3 de Derecho Romano con los apuntes de la asignatura y hazme un mini test.»
+- «Busca en mis apuntes dónde se explica la usucapión.»
+- «¿Ha habido avisos nuevos en los foros esta semana?»
 
-Las fechas que vienen de los foros se detectan automáticamente: la IA debería citarte la frase y el enlace al aviso. Compruébalas en el campus.
+Las fechas que salen de los foros se detectan automáticamente: la IA debería citarte la frase y el enlace al aviso. **Compruébalas siempre en el campus.**
 
-## 8. Privacidad (léelo)
+---
 
-- **Tus archivos se quedan en tu PC**, en tu carpeta de datos (la ves en la ventanita). Nada se sube a ningún servidor nuestro: no lo hay.
-- **La IA que conectes lee lo que pide** (un PDF, una lista de fechas, un aviso…). Eso pasa a tu conversación con esa empresa (Anthropic, OpenAI o Google) y se rige por sus condiciones.
-- **El proveedor del túnel** (localhost.run, tunnelmole, pinggy o Cloudflare) puede ver ese tráfico mientras pasa por él, porque el cifrado https termina en sus servidores.
-- Las URL de tunnelmole y pinggy **incluyen tu IP pública** en el nombre.
-- **La URL del conector es como una contraseña.** Quien la tenga puede leer tus asignaturas, materiales y avisos mientras tu PC esté encendido. No la compartas ni la publiques.
-- Si crees que se ha filtrado: pulsa **Detener**, borra el archivo `remote.json` de tu carpeta de datos y pulsa **Iniciar**. Se crea una URL nueva y la antigua deja de funcionar para siempre. Luego actualiza el conector en tu IA.
+## 5. Mis apuntes
+
+Todos los archivos que copió la extensión, ordenados por asignatura y tema, sin salir de Chrome. Ábrelo con el botón de la extensión → **Mis apuntes**.
+
+![Mis apuntes](img/mis-apuntes.png)
+
+- Ordena por nombre, fecha o asignatura, y filtra escribiendo en la caja.
+- **Buscar en mis apuntes** busca dentro del texto de los PDF y diapositivas.
+- Los archivos nuevos desde tu última visita llevan la marca **Nuevo**.
+- Al hacer clic, el PDF se abre en una pestaña nueva. Con **Abrir en ventana nueva** puedes poner dos PDF lado a lado (por ejemplo, los ejercicios y sus soluciones).
+- Word y PowerPoint no se pueden ver dentro de Chrome: usa **Descargar**.
+- Los archivos comprimidos (zip, rar…) no se copian; aparecen con un enlace al campus.
+
+![Buscar en mis apuntes](img/mis-apuntes-busqueda.png)
+
+---
+
+## 6. El botón de la extensión
+
+![Ventanita de la extensión](img/popup.png)
+
+Una frase te dice cómo va todo:
+
+- **✓ Tu IA puede ver tus apuntes**: todo bien.
+- **Abre el Campus para sincronizar**: entra en el campus una vez.
+
+Además:
+
+- **Conectar con mi IA**: si lo apagas, tu IA deja de poder leer tus apuntes hasta que lo vuelvas a encender. El panel del campus sigue funcionando.
+- **Copiar enlace**, **Mis apuntes** y **Cómo conectarla**.
+- En **Opciones avanzadas**, **Cambiar enlace** crea un enlace nuevo y el antiguo deja de funcionar para siempre. Úsalo solo si crees que alguien tiene tu enlace. Después tendrás que pegar el nuevo en tu IA.
+
+![Opciones avanzadas](img/popup-advanced.png)
+
+---
+
+## 7. Si cierras Chrome
+
+Tu IA **solo** puede leer tus apuntes mientras Chrome está abierto en tu ordenador. No hace falta tener el campus abierto, solo Chrome.
+
+Si Chrome está cerrado (o el ordenador apagado o suspendido), la IA te dirá algo como: «Uniovi Virtual no está conectado: abre Chrome…». Abre Chrome, espera unos segundos y vuelve a preguntar.
+
+Puedes preguntar desde el móvil (en la app de Claude o ChatGPT) siempre que Chrome siga abierto en tu ordenador.
+
+---
+
+## 8. Actualizar
+
+Cuando haya una versión nueva, la extensión te avisará: **«Hay una versión nueva»**. Entonces:
+
+1. En la [página de descarga](https://iyangarcia.github.io/uniovi-virtual-extension/), pulsa **Descargar**.
+2. Extrae el zip **en el mismo sitio**: clic derecho → **Extraer todo…** → **Documentos** → **Extraer**. Cuando Windows pregunte, elige **Reemplazar los archivos en el destino**.
+3. Abre `chrome://extensions` y pulsa la flecha circular **⟳** en la tarjeta de Uniovi Virtual.
+
+Tus apuntes y tu enlace **se mantienen**: no tienes que volver a conectar la IA.
+
+---
+
+## 9. Tu privacidad
+
+- **Tus archivos se quedan en tu ordenador**, dentro de Chrome. No se suben a ningún sitio.
+- **Tus preguntas y las respuestas pasan por el servicio de conexión**, que solo las reenvía entre tu IA y tu Chrome. **No guarda nada.**
+- **El enlace es personal, como una contraseña.** Quien lo tenga puede leer tus asignaturas, apuntes y avisos mientras tu Chrome esté abierto. No lo compartas. Si crees que se ha filtrado, usa **Cambiar enlace** (sección 6).
+- Lo que tu IA lee (un PDF, una lista de fechas, un aviso…) pasa a tu conversación con esa empresa (Anthropic u OpenAI) y se rige por sus condiciones, como cualquier cosa que le escribas.
 - Todo es **de solo lectura**: la IA no puede entregar tareas, escribir en foros ni cambiar nada del campus.
-- Si no quieres conector web, desactiva "Conector para IAs web" en la ventanita: el panel y los avisos de la extensión siguen funcionando igual.
 
-## 9. Problemas frecuentes
+---
 
-- **"Asistente no instalado"** en la ventanita: vuelve a ejecutar el instalador y recarga la extensión en `chrome://extensions`.
-- **"Error" o se queda en "Conectando…"**: tu red puede estar bloqueando los túneles. El asistente prueba varios y reintenta solo; prueba con otra red (por ejemplo, datos del móvil) para comprobarlo.
-- **La IA dice que no encuentra datos o están viejos**: pídele que mire `sync_status` y vuelve a entrar en el campus para sincronizar.
-- **El conector deja de responder**: ¿está tu PC encendido y sin suspender? ¿Ha cambiado la URL? (sección 6).
-- **Desinstalar**: *Configuración de Windows → Aplicaciones → Uniovi Virtual → Desinstalar*, y quita la extensión en `chrome://extensions`. Tu carpeta de datos **no** se borra; elimínala tú si quieres.
+## 10. Si algo falla
 
-## Limitaciones
-
-- Tu PC tiene que estar encendido y con internet mientras usas el conector.
-- Los datos son los de tu **última sincronización**. La extensión sincroniza sola cada pocas horas cuando abres el campus (ajústalo en su ventanita).
-- Sin conector, puedes seguir descargando materiales y subiéndolos al chat, aunque sin búsqueda en todo ni fechas actualizadas.
+- **Chrome dice «Falta el archivo de manifiesto» al cargar la carpeta.** Has elegido una carpeta de más o de menos. Elige la carpeta `uniovi-virtual` que tiene dentro `manifest.json`. A veces está dentro de otra carpeta con el mismo nombre: entra en la de fuera y elige la de dentro.
+- **No veo «Cargar descomprimida».** Activa **Modo Desarrollador**, arriba a la derecha de `chrome://extensions`.
+- **La IA dice que Uniovi Virtual no está conectado.** Abre Chrome. Si ya está abierto, mira que **Conectar con mi IA** esté encendido en el botón de la extensión, y que tengas internet.
+- **La IA no encuentra mis apuntes o los datos son viejos.** Entra en el campus y espera a que termine de sincronizar. Puedes pedirle a la IA que mire `sync_status`: te dirá cuándo fue la última sincronización y si hubo avisos.
+- **La IA da un error o no responde.** Comprueba que pegaste el enlace completo. Si no funciona, bórralo de tu IA, pulsa **Copiar enlace** otra vez y vuelve a añadirlo.
+- **Chrome me avisa de que tengo extensiones en modo desarrollador.** Es normal. Déjala activada.
+- **He quitado la extensión sin querer.** Instálala otra vez (sección 1) y entra en el campus: tus apuntes se vuelven a descargar. Tu enlace será nuevo, así que tendrás que conectar tu IA otra vez.
+- **Desinstalar.** En `chrome://extensions`, pulsa **Quitar** en la tarjeta de Uniovi Virtual y borra la carpeta `Documentos\uniovi-virtual`. Quita también el conector de tu IA.
 
 ---
 
 ### Para desarrolladores
 
-Sin instalador: `npm install && npm run build`, carga `extension/dist` y ejecuta `npm run remote` (o `start-remote.bat`), que abre el puente, el MCP remoto en `127.0.0.1:47824/mcp/<token>` y un túnel; `--rotate-token` cambia la URL. El instalador se genera con `npm run package` (ver README y CLAUDE.md).
+`npm install && npm run build`, y carga `extension/dist` en `chrome://extensions`. Para usarlo desde Claude Code (stdio), ver el README. Lista de pruebas manuales: [PRUEBAS-MANUALES.md](PRUEBAS-MANUALES.md).

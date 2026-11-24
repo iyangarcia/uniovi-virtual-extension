@@ -225,12 +225,12 @@ test("when every provider fails the state is error (with each reason) and the ro
   let fail = true;
   const a = fake("localhost.run", (emit) => setTimeout(() => emit(fail ? { type: "down", reason: "port 22 blocked" } : { type: "ready", url: "https://late.example" }), 1));
   const b = fake("tunnelmole", (emit) => emit({ type: "error", message: "websocket error" })); // then times out
-  const t = startTunnel("http://x", { providers: [a, b], readyTimeoutMs: 20, retryDelayMs: 40, log: quiet });
-  await tick(35);
+  const t = startTunnel("http://x", { providers: [a, b], readyTimeoutMs: 20, retryDelayMs: 250, log: quiet });
+  await tick(100);
   assert.equal(t.status().state, "error");
   assert.equal(t.status().error, "localhost.run: port 22 blocked | tunnelmole: not ready after 0.02s; websocket error");
   fail = false;
-  await tick(60);
+  await tick(300);
   assert.equal(brief(t.status()), "ready localhost.run https://late.example");
   assert.equal(a.starts, 2);
   t.stop();

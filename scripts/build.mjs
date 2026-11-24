@@ -26,12 +26,15 @@ const copyPlugin = { name: "copy-static", setup: (b) => b.onEnd(copyStatic) };
 const configs = [
   // Content scripts cannot be ES modules: bundle as IIFE.
   { entryPoints: ["extension/src/content.ts"], outfile: `${extDist}/content.js`, format: "iife", platform: "browser", target: "chrome120" },
+  // The background service worker bundles the MCP core with unpdf, fflate and the MCP SDK (~3.9 MB).
+  // MV3 module workers forbid dynamic import(), so no code splitting: esbuild inlines everything.
   {
     entryPoints: ["extension/src/background.ts", "extension/src/popup.ts"],
     outdir: extDist,
     format: "esm",
     platform: "browser",
     target: "chrome120",
+    splitting: false,
     plugins: [copyPlugin],
   },
   {

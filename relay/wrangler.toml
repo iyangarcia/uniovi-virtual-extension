@@ -1,0 +1,17 @@
+# Uniovi Virtual relay (see DESPLIEGUE.md). Free plan: SQLite-backed Durable Objects only.
+name = "uniovi-relay"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "AGENTS"
+class_name = "AgentRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AgentRoom"]
+
+# Privacy: no Workers Logs / invocation logs (URLs carry the student's id and token).
+[observability]
+enabled = false

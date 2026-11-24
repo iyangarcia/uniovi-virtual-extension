@@ -1,0 +1,14 @@
+{
+  "name": "uniovi-relay",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker relay between AI clients and the Uniovi Virtual extension (see DESPLIEGUE.md).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261109.1",
+    "wrangler": "4.159.0"
+  }
+}

@@ -1,8 +1,10 @@
 import { isImportant, seenAll } from "../../shared/digest.ts";
 import { isWarming, warmTextCache } from "../../shared/mcp/extract.ts";
 import { LATEST_RELEASE_API } from "../../shared/release.ts";
-import { BRIDGE_URL, type BridgeStatus, type Resource, type Snapshot } from "../../shared/types.ts";
+import type { Resource, Snapshot } from "../../shared/types.ts";
 import { initAgent, startAgent } from "./agent/index.ts";
+import { type BridgeDeps, DEV_BRIDGE_KEY, devBridgeOn, sendToBridge } from "./bridge.ts";
+import type { KnownFile } from "./download.ts";
 import { getSettings, type Message, type Reply, type SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
 import { shouldCheck, UPDATE_KEYS, updateFromRelease } from "./ui/update.ts";
@@ -17,29 +19,24 @@ async function setState(patch: Partial<SyncState>) {
   await chrome.action.setBadgeBackgroundColor({ color: next.error ? "#c62828" : "#1565c0" });
 }
 
-async function bridge(path: string, init?: RequestInit): Promise<Response> {
-  let res: Response;
-  try {
-    res = await fetch(BRIDGE_URL + path, init);
-  } catch {
-    throw new Error("Claude bridge not running (open Claude Code/Desktop, or run `npm run serve`).");
-  }
-  if (!res.ok) throw new Error(`Bridge ${path}: HTTP ${res.status} ${await res.text()}`);
-  return res;
-}
+// Dev bridge (bridge.ts): off unless chrome.storage.local.devBridge === true.
+const bridgeDeps: BridgeDeps = {
+  isOn: async () => devBridgeOn(await chrome.storage.local.get(DEV_BRIDGE_KEY)),
+  fetch: (input, init) => fetch(input, init),
+};
 
 // ---------------------------------------------------------------- snapshot handling
 
 /**
  * Stores the snapshot locally (chrome.storage for the panel, IndexedDB for the AI), notifies about
- * new posts, then tries the optional local bridge (Claude Code / Desktop users).
+ * new posts, then, for developers who switched it on, delivers it to the local dev bridge.
  */
 async function onSnapshot(snapshot: Snapshot) {
   await idbStore.saveSnapshot(snapshot);
   const { snapshot: prev, seen } = (await chrome.storage.local.get(["snapshot", "seen"])) as { snapshot?: Snapshot; seen?: unknown };
   await chrome.storage.local.set({
     snapshot,
-    pendingBridge: true,
+    ...((await bridgeDeps.isOn()) ? { pendingBridge: true } : {}),
     // First sync ever: treat everything as seen, otherwise the panel opens with 300 "new" items.
     ...(seen ? {} : { seen: seenAll(snapshot) }),
   });
@@ -54,10 +51,12 @@ async function flushBridge() {
   };
   if (!pendingBridge || !snapshot) return;
   try {
-    await bridge("/api/snapshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) });
-    await chrome.storage.local.set({ pendingBridge: false });
+    const body = JSON.stringify(snapshot);
+    if (await sendToBridge(bridgeDeps, "/api/snapshot", { method: "POST", headers: { "Content-Type": "application/json" }, body })) {
+      await chrome.storage.local.set({ pendingBridge: false });
+    }
   } catch {
-    // Claude closed; retried by the alarm.
+    // Dev server not running; retried by the alarm.
   }
 }
 
@@ -92,12 +91,6 @@ async function notifyNewPosts(prev: Snapshot, next: Snapshot) {
   }
 }
 
-// ---------------------------------------------------------------- optional local bridge (Claude Code / Desktop)
-
-async function bridgeStatus(): Promise<BridgeStatus> {
-  return (await (await bridge("/api/status")).json()) as BridgeStatus;
-}
-
 // ---------------------------------------------------------------- update notice
 
 const UPDATE_ALARM = "update-check";
@@ -126,7 +119,13 @@ async function checkForUpdate(force = false) {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && UPDATE_KEYS.devApi in changes && changes[UPDATE_KEYS.devApi]!.newValue) void checkForUpdate(true);
+  if (area !== "local") return;
+  if (UPDATE_KEYS.devApi in changes && changes[UPDATE_KEYS.devApi]!.newValue) void checkForUpdate(true);
+  if (DEV_BRIDGE_KEY in changes) {
+    void ensureAlarms();
+    // Switched on: deliver the snapshot already stored. (Files reach the bridge as they are downloaded.)
+    if (changes[DEV_BRIDGE_KEY]!.newValue === true) void chrome.storage.local.set({ pendingBridge: true }).then(flushBridge);
+  }
 });
 
 chrome.notifications.onClicked.addListener(async (id) => {
@@ -140,15 +139,15 @@ chrome.notifications.onClicked.addListener(async (id) => {
 
 // ---------------------------------------------------------------- file ingest
 
-/** Stores one downloaded file in IndexedDB, then (optionally, silently) copies it to the local bridge. */
+/** Stores one downloaded file in IndexedDB, then, if the developer switched it on, copies it to the dev bridge. */
 async function ingestFile(resource: Resource, filename: string, contentType: string, base64: string) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const snapshot = (await idbStore.snapshot()) ?? ((await chrome.storage.local.get("snapshot")).snapshot as Snapshot | undefined);
   const course = snapshot?.courses.find((c) => c.id === resource.courseId)?.shortname ?? String(resource.courseId);
   await idbStore.putFile({ ...resource, filename }, course, contentType, bytes);
   scheduleWarm();
-  // Claude Code / Desktop users with `npm run serve` running also get the file on disk. Never required.
-  await bridge(`/api/files?key=${encodeURIComponent(resource.key)}`, {
+  // Developers with `npm run serve` running also get the file on disk. Never required.
+  await sendToBridge(bridgeDeps, `/api/files?key=${encodeURIComponent(resource.key)}`, {
     method: "PUT",
     headers: { "Content-Type": contentType, "X-Resource": encodeURIComponent(JSON.stringify({ ...resource, filename })) },
     body: bytes,
@@ -196,9 +195,6 @@ async function triggerSync(tabId?: number): Promise<void> {
 
 async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
-    case "bridge-status":
-      return bridgeStatus();
-
     case "snapshot-collected":
       await onSnapshot(msg.snapshot);
       return null;
@@ -207,9 +203,11 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       await ingestFile(msg.resource, msg.filename, msg.contentType, msg.base64);
       return null;
 
-    case "known-files":
-      // Skipped (unreadable) files count as known, so the content script doesn't fetch them again.
-      return { ...(await idbStore.skippedFiles()), ...(await idbStore.knownFiles()) };
+    case "known-files": {
+      // Skipped files (unreadable, too large) count as known, so the content script doesn't fetch them again.
+      const skipped = Object.fromEntries(Object.entries(await idbStore.skippedFiles()).map(([k, t]) => [k, { timemodified: t }]));
+      return { ...skipped, ...(await idbStore.knownFiles()) } satisfies Record<string, KnownFile>;
+    }
 
     case "skip-file":
       await idbStore.markSkipped(msg.resource);
@@ -261,16 +259,15 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse: (r: Re
 
 async function ensureAlarms() {
   if (!(await chrome.alarms.get("periodic-sync"))) await chrome.alarms.create("periodic-sync", { periodInMinutes: 60 });
-  // Cheap localhost probe: delivers a stored snapshot as soon as Claude (and so the bridge) starts.
-  if (!(await chrome.alarms.get("bridge-flush"))) await chrome.alarms.create("bridge-flush", { periodInMinutes: 1 });
+  // Developers only (devBridge): delivers a stored snapshot as soon as the dev server starts.
+  if (!(await bridgeDeps.isOn())) await chrome.alarms.clear("bridge-flush");
+  else if (!(await chrome.alarms.get("bridge-flush"))) await chrome.alarms.create("bridge-flush", { periodInMinutes: 1 });
   if (!(await chrome.alarms.get(UPDATE_ALARM))) await chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 360 });
 }
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   void ensureAlarms();
   void startAgent();
-  // Left over from the goal-04 helper (its tunnel URL changed per run; the relay link doesn't).
-  void chrome.storage.local.remove("knownRemoteUrl");
   if (reason === "install") void chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 });
 chrome.runtime.onStartup.addListener(() => {

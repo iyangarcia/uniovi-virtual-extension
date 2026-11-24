@@ -1,5 +1,6 @@
 import type { DataStore, StoredFile } from "../../../shared/mcp/store.ts";
 import type { Resource, Snapshot } from "../../../shared/types.ts";
+import type { KnownFile } from "../download.ts";
 import { fileLabel, textKey, withClashTag } from "./paths.ts";
 
 // The student's data, kept by the extension itself in IndexedDB (database "uniovi"). Works from the
@@ -147,9 +148,9 @@ export class IdbStore implements DataStore {
     return (await get<Blob>("blobs", key)) ?? null;
   }
 
-  /** Resource key → timemodified of every stored file, for incremental sync. */
-  async knownFiles(): Promise<Record<string, number>> {
-    return Object.fromEntries((await allFiles()).map((f) => [f.key, f.timemodified]));
+  /** Resource key → timemodified and campus URL of every stored file, for incremental sync. */
+  async knownFiles(): Promise<Record<string, KnownFile>> {
+    return Object.fromEntries((await allFiles()).map((f) => [f.key, { timemodified: f.timemodified, url: f.resource.url }]));
   }
 
   /** Files deliberately not downloaded (archives, binaries…): key → timemodified (0 if unknown). */
@@ -171,14 +172,6 @@ export class IdbStore implements DataStore {
   async usage(): Promise<{ files: number; bytes: number }> {
     const files = await allFiles();
     return { files: files.length, bytes: files.reduce((n, f) => n + f.size, 0) };
-  }
-
-  /** Deletes everything: snapshot, files, bytes and text cache. */
-  async clear(): Promise<void> {
-    const db = await openDb();
-    const tx = db.transaction([...STORES], "readwrite");
-    for (const s of STORES) tx.objectStore(s).clear();
-    await finished(tx);
   }
 }
 

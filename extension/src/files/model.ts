@@ -3,7 +3,7 @@
 import { fold, TZ } from "../../../shared/mcp/common.ts";
 import type { StoredFile } from "../../../shared/mcp/store.ts";
 import type { Course, Resource, Snapshot } from "../../../shared/types.ts";
-import { fileExt } from "../readable.ts";
+import { fileExt, isCampusFile, isReadableFile } from "../readable.ts";
 
 export { fold };
 
@@ -98,8 +98,8 @@ export function displayTitle(r: Pick<Resource, "modname" | "name" | "filename">)
 }
 
 /**
- * Every file to list: the stored ones (from the IndexedDB index) and the skipped ones (known to the
- * snapshot, deliberately not downloaded). Ordered by the snapshot, which follows the campus pages.
+ * Every file to list: the stored ones (from the IndexedDB index) and the ones that stay campus links
+ * (known to the snapshot, deliberately not downloaded: archives, binaries, media, too large). Ordered by the snapshot, which follows the campus pages.
  */
 export function buildEntries(snapshot: Snapshot | null, index: Record<string, StoredFile>, skipped: Record<string, number>): FileEntry[] {
   const order = new Map<string, number>();
@@ -126,7 +126,10 @@ export function buildEntries(snapshot: Snapshot | null, index: Record<string, St
     });
   }
   for (const r of snapshot?.resources ?? []) {
-    if (index[r.key] || !(r.key in skipped)) continue;
+    if (index[r.key]) continue;
+    // Skipped after a look at the response (type known only after the redirect, too large), or a
+    // file the campus page already names as an archive/binary/video (never fetched, so never in `skipped`).
+    if (!(r.key in skipped) && !(isCampusFile(r) && isReadableFile(r) === false)) continue;
     out.push({
       key: r.key,
       courseId: r.courseId,
@@ -294,12 +297,13 @@ export function viewerPath(key: string, page?: number): string {
   return `files.html?open=${encodeURIComponent(key)}${page ? `&page=${page}` : ""}`;
 }
 
-/** Only http(s) campus links become anchors; anything else (javascript:, data:…) is dropped. */
+/** Only https links to the campus become anchors; anything else (javascript:, data:, other sites…) is dropped. */
 export function safeCampusUrl(url: string | undefined): string | null {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    const campus = u.hostname === "campusvirtual.uniovi.es" || u.hostname.endsWith(".campusvirtual.uniovi.es");
+    return u.protocol === "https:" && campus ? u.href : null;
   } catch {
     return null;
   }

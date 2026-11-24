@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import type { Snapshot } from "../../shared/types.ts";
 
 // Regressions found while bringing up the server on a real machine (goals/02-next-steps.md).
 
@@ -20,7 +21,8 @@ test("concurrent writes of one JSON file don't fail (a shared tmp name raced: EN
 });
 
 test("cold search answers within the budget and leaves extraction to the background indexer", async () => {
-  const mcp = await import("../src/mcp.ts");
+  const search = await import("../../shared/mcp/search.ts");
+  const core = await import("../../shared/mcp/extract.ts");
   const extract = await import("../src/extract.ts");
   const resource = { key: "7:/tema.txt", cmid: 7, courseId: 1, section: "Tema 2", name: "Tema 2", modname: "resource", url: "https://campus/r/7", filename: "tema.txt" };
   const snap = {
@@ -32,23 +34,23 @@ test("cold search answers within the budget and leaves extraction to the backgro
     assignments: [],
     events: [],
     posts: [],
-  } as unknown as Parameters<typeof mcp.searchMaterials>[0];
+  } as unknown as Snapshot;
   await store.saveSnapshot(snap);
   const stored = await store.storeFile(resource as never, "FIS", "text/plain", new TextEncoder().encode("Intro\nLa TERMODINÁMICA estudia\nla energía y el calor.\nFin"));
   assert.equal(await extract.cachedTextOf(stored), null);
 
-  const budget = mcp.searchBudget.ms;
-  mcp.searchBudget.ms = 0; // budget already spent: must not extract inline
+  const budget = search.searchBudget.ms;
+  search.searchBudget.ms = 0; // budget already spent: must not extract inline
   try {
-    const cold = await mcp.searchMaterials(snap, "termodinamica", undefined, 10);
+    const cold = await search.searchMaterials(store.nodeStore, { snapshot: snap, query: "termodinamica", limit: 10 });
     assert.deepEqual(cold.results, []);
     assert.equal(cold.pending, 1);
-    await extract.warmTextCache([stored]); // what the cold search kicked off
-    const warm = await mcp.searchMaterials(snap, "termodinamica energia", undefined, 10);
+    await core.warmTextCache(store.nodeStore, [stored]); // what the cold search kicked off
+    const warm = await search.searchMaterials(store.nodeStore, { snapshot: snap, query: "termodinamica energia", limit: 10 });
     assert.equal(warm.pending, 0);
     // Accent- and case-insensitive, terms may sit on adjacent lines.
     assert.deepEqual(warm.results.map((r) => r.key), ["7:/tema.txt"]);
   } finally {
-    mcp.searchBudget.ms = budget;
+    search.searchBudget.ms = budget;
   }
 });

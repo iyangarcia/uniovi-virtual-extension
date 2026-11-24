@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import type { TunnelStatus } from "../../shared/helper.ts";
+import type { DataStore, StoredFile } from "../../shared/mcp/store.ts";
 import type { Resource, Snapshot } from "../../shared/types.ts";
 import { effectiveDataDir } from "./config.ts";
 
@@ -13,15 +14,8 @@ import { effectiveDataDir } from "./config.ts";
 //   files/<course>/<section>/<filename>
 //   .cache/<hash>.txt    extracted text of stored files
 
-export interface StoredFile {
-  key: string;
-  path: string; // relative to dataDir, forward slashes
-  size: number;
-  contentType: string;
-  timemodified: number;
-  storedAt: number;
-  resource: Resource;
-}
+// StoredFile.path is relative to dataDir, forward slashes.
+export type { StoredFile };
 
 export const dataDir = resolve(effectiveDataDir());
 
@@ -164,6 +158,17 @@ export async function readCache(f: StoredFile): Promise<string | null> {
 export async function writeCache(f: StoredFile, text: string) {
   await writeAtomic(cachePathFor(f), text);
 }
+
+/** The shared MCP core's view of the on-disk layout (one instance: the core keeps per-store state). */
+export const nodeStore: DataStore = {
+  snapshot: loadSnapshot,
+  index: loadIndex,
+  bytes: async (f) => new Uint8Array(await readFile(absolutePath(f))),
+  readText: readCache,
+  writeText: writeCache,
+  localPath: absolutePath,
+  dataDir,
+};
 
 // ---------------------------------------------------------------- remote connector state
 // remote.json holds the secret token of the public MCP URL and, while `--remote` / `--service`

@@ -27,9 +27,9 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [x] Node server uses it (server/src/store.ts implements DataStore); all existing MCP/search tests pass unchanged in behaviour; new tests run the core against an in-memory DataStore
 
 ## 3. Extension serves MCP
-- [ ] IndexedDB DataStore in the extension; ingest stores snapshot + files there (bridge POST kept as optional extra when a local server answers); knownFiles from IndexedDB; only readable types are downloaded (pdf, office, text/code, images); archives/exe skipped and listed as campus links
-- [ ] Agent: id/secret/token generated once, WebSocket to the relay with hello, ping, reconnect with backoff (+ alarm fallback), token check (404), in-flight cap, stateless MCP per request via WebStandardStreamableHTTPServerTransport (JSON responses), remote mode (no local paths)
-- [ ] Verified in Chrome for Testing (puppeteer, fixture data, local wrangler relay): MCP client 10/10 through the relay to the loaded extension; service worker stays connected ≥ 30 min (or reconnects within 60 s)
+- [x] IndexedDB DataStore in the extension; ingest stores snapshot + files there (bridge POST kept as optional extra when a local server answers); knownFiles from IndexedDB; only readable types are downloaded (pdf, office, text/code, images); archives/exe skipped and listed as campus links
+- [x] Agent: id/secret/token generated once, WebSocket to the relay with hello, ping, reconnect with backoff (+ alarm fallback), token check (404), in-flight cap, stateless MCP per request via WebStandardStreamableHTTPServerTransport (JSON responses), remote mode (no local paths)
+- [x] Verified in Chrome for Testing (puppeteer, fixture data, local wrangler relay): MCP client 10/10 through the relay to the loaded extension; service worker stays connected ≥ 30 min (or reconnects within 60 s)
 
 ## 4. UX for non-technical students
 - [ ] Welcome page opens on install: extension ✓, "Entra en el Campus Virtual" ✓ after first sync, "Conecta tu IA" cards (Claude / ChatGPT / Gemini) with Conectar automáticamente + Copiar + steps, honest plan notes
@@ -75,3 +75,21 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - After the merge into master (with `npm ci` inside relay/): typecheck clean, `npm test` 122 pass / 0 fail, build OK.
 - `relay/DESPLIEGUE.md` (Spanish) covers: the account, `wrangler login`/`deploy`, setting `RELAY_URL`, a curl check, free-plan limits (100k/day, error 1027, no charges) and rollback.
 - Not verifiable without an account: a real deploy, and production limits on WebSocket message size. A near-8 MB response is about 10.7 MB once base64-encoded, which is untested.
+
+### Section 3, extension serves MCP (agent C, re-checked by coordinator)
+- `extension/src/store/idb.ts`: `IdbStore implements DataStore` (DB `uniovi`: meta/files/blobs/texts), with UI helpers `putFile`, `fileBlob`, `knownFiles`, `skippedFiles`, `usage`, `clear`. `extension/src/readable.ts` decides by extension, then by mimetype; when both are unknown the content script decides after the redirect. Archives and binaries are not downloaded and are recorded as `skipped`. The background stores the snapshot and files in IndexedDB, warms the text cache, and still tries the bridge silently. `knownFiles` comes from IndexedDB.
+- `extension/src/agent/`:
+  - Identity: `agent {id, secret, token}`, plus `aiConnection`, `agentState`, `agentStats`, and a `devRelayUrl` used only in tests.
+  - Connection: hello, ping every 20 s, the socket is dropped after 3 missed pongs, reconnect with backoff from 1 s to 60 s with jitter, stops on `rejected`, keepalive alarm every minute.
+  - Requests: constant-time token check (404), non-POST → 405, at most 16 in flight. Each request gets a fresh stateless `createMcpServer(idbStore, {remote: true})` with JSON responses.
+- Agent's evidence:
+  - 11 + 7 unit tests, with a hand-written fake relay in `server/test/helpers/fake-relay.ts`.
+  - Chrome for Testing, fixture data and the fake relay: 13/13 PASS.
+  - Lifetime with nothing attached: **one socket for 32.0 min (96 pings, never more than 20 s apart, no close)**. After `ServiceWorker.stopAllWorkers` it was back in 0.48 s and 1.38 s.
+- **Coordinator integrated run, real relay**: master build, `npx wrangler dev --port 8787` from `relay/`, Chrome for Testing 148 with a fresh profile and fixture data (`tmp/pptr/verify-integrated.mjs`). Result: **RESULT pass=13 fail=0**:
+  - IndexedDB held 3 blobs, and the zip was skipped.
+  - `agentState connected`.
+  - **MCP SDK client through the Cloudflare relay to the extension: 10/10 tool calls**: sync_status, list_courses, get_deadlines, get_exam_dates, list_materials, read_material on the PDF (`--- page 2 ---`) and the docx, search_materials, search_forums, get_forum_post. No local paths appeared.
+  - Wrong token → 404. `aiConnection=false` → relay 503, then back on → connected. Token rotation → the old URL gives 404 and the new one works.
+- After merging into master: typecheck clean, `npm test` 140 pass / 0 fail, build OK. wrangler/workerd and every Chrome for Testing were stopped. The worktrees were removed after unlinking their node_modules junctions, and the main node_modules is intact.
+- Not verified: the real campus download path after a redirect, and Edge.

@@ -1,4 +1,4 @@
-import { rotateToken } from "./agent/index.ts";
+import { changeLink } from "./agent/identity.ts";
 import { AGENT_KEYS, aiConnectionEnabled, type AgentState } from "./agent/state.ts";
 import { getSettings, send, type Settings, type SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
@@ -10,14 +10,15 @@ import { pendingUpdate, UPDATE_KEYS } from "./ui/update.ts";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const VERSION = chrome.runtime.getManifest().version;
 
-const KEYS = [AGENT_KEYS.enabled, AGENT_KEYS.state, "syncState", "snapshot", UPDATE_KEYS.update] as const;
+// Not "snapshot": it is large, and syncState.lastSync already says whether a sync happened.
+const KEYS = [AGENT_KEYS.enabled, AGENT_KEYS.state, "syncState", UPDATE_KEYS.update] as const;
 
 async function render() {
   const got = await chrome.storage.local.get([...KEYS]);
   const enabled = aiConnectionEnabled(got[AGENT_KEYS.enabled]);
   const agent = got[AGENT_KEYS.state] as AgentState | undefined;
   const sync = got.syncState as SyncState | undefined;
-  const synced = !!sync?.lastSync || !!got.snapshot;
+  const synced = !!sync?.lastSync;
 
   const view = statusSentence({ enabled, ...(agent ? { agent } : {}), synced });
   const box = $("status");
@@ -105,7 +106,7 @@ $("sync").addEventListener("click", async () => {
 $("rotate").addEventListener("click", () => ($("confirmRotate").hidden = false));
 $("rotateNo").addEventListener("click", () => ($("confirmRotate").hidden = true));
 $("rotateYes").addEventListener("click", async () => {
-  const url = await rotateToken();
+  const url = await changeLink();
   $<HTMLInputElement>("linkBox").value = url;
   $("confirmRotate").hidden = true;
   const copied = await copyText(url);

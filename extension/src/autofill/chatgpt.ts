@@ -20,10 +20,10 @@ export const chatgpt: AutofillSpec = {
         "mcp personalizado",
         "=create connector",
         "=crear conector",
-        "=create",
-        "=crear",
       ],
-      openers: ["=+", "=add", "=anadir", "=new", "=nuevo", "=add plugin", "=anadir plugin"],
+      // A bare "Create" is too generic to be a step (it may confirm something else); as an opener it
+      // is tried once, after 4 s, and never inside a form or a dialog with fields (engine.ts).
+      openers: ["=+", "=add", "=anadir", "=new", "=nuevo", "=add plugin", "=anadir plugin", "=create", "=crear"],
     },
   ],
   urlField: ["url", "mcp server", "servidor mcp"],

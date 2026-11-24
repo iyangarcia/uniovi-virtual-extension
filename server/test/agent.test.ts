@@ -9,12 +9,15 @@ import { mcpHandler } from "../../extension/src/agent/mcp.ts";
 import {
   answer,
   backoffMs,
+  connectionKey,
   filterHeaders,
   fromBase64,
+  idChanged,
   isValidIdentity,
   newIdentity,
   parseRelayMessage,
   pathHasToken,
+  rotatedIdentity,
   safeEqual,
   toBase64,
 } from "../../extension/src/agent/protocol.ts";
@@ -37,6 +40,20 @@ test("identity: id/token 22 chars, secret 43, base64url, all different", () => {
   assert.notEqual(a.secret, b.secret);
   assert.equal(isValidIdentity({ ...a, token: "short" }), false);
   assert.equal(isValidIdentity(null), false);
+});
+
+test("«Cambiar enlace»: new id and token, same secret; the background reconnects for a new id only", () => {
+  const a = newIdentity();
+  const b = rotatedIdentity(a);
+  assert.ok(isValidIdentity(b));
+  assert.notEqual(b.id, a.id);
+  assert.notEqual(b.token, a.token);
+  assert.equal(b.secret, a.secret);
+  assert.ok(idChanged(a, b));
+  assert.equal(idChanged(undefined, a), false, "first identity: startAgent is already using it");
+  assert.equal(idChanged(a, { ...a, token: b.token }), false);
+  assert.notEqual(connectionKey("wss://r", a), connectionKey("wss://r", b));
+  assert.equal(connectionKey("wss://r", a), connectionKey("wss://r", { ...a }));
 });
 
 test("token check: /<token>, /<token>/…, ?query; anything else is 404", () => {
@@ -282,5 +299,45 @@ test("requests beyond MAX_INFLIGHT get 503 from the agent (injected fake socket)
   await waitFor(() => sent.length === 2 + MAX_INFLIGHT);
   assert.ok(sent.slice(2).every((m) => JSON.parse(m).status === 200));
   assert.equal(conn.inFlight, 0);
+  conn.stop();
+});
+
+test("after «Cambiar enlace» the new id connects with the same secret; the old link gets 503", async () => {
+  const before = makeAgent();
+  before.conn.start();
+  await waitFor(() => before.conn.state === "connected");
+  // What the background does on the identity change: stop the old connection, start the new one.
+  const next = rotatedIdentity(before.identity);
+  before.conn.stop();
+  const after = makeAgent(next);
+  after.conn.start();
+  await waitFor(() => after.conn.state === "connected");
+  await waitFor(() => !relay.agents.has(before.identity.id));
+  const old = await fetch(connectorUrl(before.identity.id, before.identity.token, relay.url), { method: "POST", body: "{}" });
+  assert.equal(old.status, 503);
+  const oldTokenNewId = await fetch(connectorUrl(next.id, before.identity.token, relay.url), { method: "POST", body: "{}" });
+  assert.equal(oldTokenNewId.status, 404);
+  const client = new Client({ name: "t", version: "0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(connectorUrl(next.id, next.token, relay.url))));
+  assert.ok((await client.listTools()).tools.length > 0);
+  await client.close();
+  after.conn.stop();
+});
+
+test("only requests with the right token count as «AI connected» (request event)", async () => {
+  const events: string[] = [];
+  const { conn, identity } = makeAgent(newIdentity(), { onEvent: (e) => void events.push(e) });
+  conn.start();
+  await waitFor(() => conn.state === "connected");
+  const bad = await fetch(connectorUrl(identity.id, "x".repeat(22), relay.url), { method: "POST", body: "{}" });
+  assert.equal(bad.status, 404);
+  assert.equal(events.filter((e) => e === "request").length, 0);
+  const ok = await fetch(connectorUrl(identity.id, identity.token, relay.url), {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(events.filter((e) => e === "request").length, 1);
   conn.stop();
 });

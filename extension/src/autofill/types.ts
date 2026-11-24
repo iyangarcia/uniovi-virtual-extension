@@ -3,7 +3,8 @@
 // fillConnector() (engine.ts), which chrome.scripting serialises without its closure.
 //
 // Text patterns are compared lower-cased and without accents. "=add" means the whole text must be
-// "add"; anything else is a substring match. The engine never clicks the AI's final confirm button.
+// "add"; anything else is a substring match. The engine never clicks the AI's final confirm button,
+// nor any submit button or anything inside a form, a dialog with fields or a card with fields.
 
 export type AiId = "claude" | "chatgpt" | "gemini";
 

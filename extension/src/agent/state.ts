@@ -2,10 +2,12 @@
 // in chrome.storage.local for the popup and welcome page. Pure types; no chrome APIs.
 //
 //   agent          AgentIdentity { id, secret, token }: created once on first run. Never shown, except
-//                  id + token inside the connector URL (connectorUrl() in agent/index.ts).
+//                  id + token inside the connector URL (connectorUrl() in agent/identity.ts).
+//                  «Cambiar enlace» (changeLink()) replaces id and token; the secret stays.
 //   aiConnection   boolean, default true (absent = true). false: the agent disconnects and stays off.
 //   agentState     AgentState: the connection state, written on every change.
-//   agentStats     AgentStats: counters and timestamps for diagnostics (updated on every pong, ~20 s).
+//   agentStats     AgentStats: counters and timestamps for diagnostics (written on connect, close and request;
+//                  lastPong is kept in memory and only written along with those).
 //   devRelayUrl    string, dev/test only: replaces RELAY_URL (http(s):// or ws(s)://, no trailing slash).
 
 export type AgentStateName =

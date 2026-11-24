@@ -203,6 +203,29 @@ async function main() {
     check("9 MB body (chunked, no content-length) → 413", r2.status === 413, `status ${r2.status}`);
   }
 
+  // An agent whose response header can't make an HTTP response (newline in the value) → 502 at once,
+  // not a request left hanging (settle() has already dropped it from `pending` by then).
+  {
+    const badId = b64url(16);
+    const ws = new WebSocket(`${WS}/agent/${badId}`);
+    await new Promise((res, rej) => {
+      ws.onerror = rej;
+      ws.onopen = () => ws.send(JSON.stringify({ type: "hello", v: 1, secret: b64url(32), agent: "e2e-bad" }));
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.type === "welcome") return res();
+        if (m.type === "request")
+          ws.send(JSON.stringify({ type: "response", rid: m.rid, status: 200, headers: { "content-type": `text/plain${String.fromCharCode(13, 10)}x-evil: 1` }, body: Buffer.from("hi").toString("base64") }));
+      };
+    });
+    const t0 = Date.now();
+    // Before the fix this request hung forever; the abort turns that into a clear failure.
+    const r = await post(`${RELAY}/mcp/${badId}/${token}`, rpc("tools/list"), { init: { signal: AbortSignal.timeout(8000) } }).catch((e) => ({ status: e.name, headers: new Headers() }));
+    const ms = Date.now() - t0;
+    check("malformed agent response header → 502 at once", r.status === 502 && !r.headers.get("x-evil") && ms < 2500, `status ${r.status} after ${ms} ms`);
+    ws.close();
+  }
+
   // Timeout → 504 (hang tool).
   {
     const t0 = Date.now();

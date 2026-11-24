@@ -26,6 +26,8 @@ test("status sentence: connected with and without data, connecting, off, errors"
   const rejected = statusSentence({ enabled: true, agent: at("rejected", "bad-secret"), synced: true });
   assert.equal(rejected.tone, "error");
   assert.match(rejected.hint!, /Conectar con mi IA/);
+  // «Cambiar enlace» gives a new id, so the relay's fresh Durable Object accepts us (agent/identity.ts).
+  assert.match(rejected.hint!, /Cambiar enlace.*enlace nuevo/);
 });
 
 test("no technical words in what the student reads", () => {
@@ -112,6 +114,13 @@ test("auto-fill specs: https origins declared as optional host permissions, star
     // Specs travel to the page as executeScript args: they must survive JSON.
     assert.deepEqual(JSON.parse(JSON.stringify(spec)), spec);
     // Never a pattern that could be the AI's own final confirm button.
-    for (const p of spec.steps.flatMap((s) => s.texts)) assert.doesNotMatch(p, /^=(add|anadir|añadir|agregar|save|guardar|confirm|confirmar|connect|conectar)$/);
+    for (const p of spec.steps.flatMap((s) => s.texts)) assert.doesNotMatch(p, /^=(add|anadir|añadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar)$/);
   }
+});
+
+test("root package.json carries the extension's name and version", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { name: string; version: string };
+  const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as { version: string };
+  assert.equal(pkg.name, "uniovi-virtual");
+  assert.equal(pkg.version, manifest.version);
 });

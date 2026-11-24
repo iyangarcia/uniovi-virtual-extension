@@ -16,6 +16,7 @@ import {
 } from "../../shared/relay.ts";
 import {
   HELLO_TIMEOUT_MS,
+  agentHttpResponse,
   bytesToBase64,
   contentLengthTooLarge,
   decodeResponseBody,
@@ -198,10 +199,11 @@ export class AgentRoom extends DurableObject<Env> {
     if (!p) return;
     clearTimeout(p.timer);
     this.pending.delete(res.rid);
+    // The entry is gone from `pending` now, so every path below must resolve, or the AI's request
+    // would hang (no timer left to answer it).
     const body = decodeResponseBody(res.body);
     if (!body) return p.resolve(text(502, "Response too large"));
-    const nullBody = res.status === 204 || res.status === 205 || res.status === 304;
-    p.resolve(new Response(nullBody ? null : body, { status: res.status, headers: res.headers }));
+    p.resolve(agentHttpResponse(res, body) ?? text(502, "Bad response from the extension"));
   }
 
   // ---- HTTP forwarding ----

@@ -17,8 +17,8 @@ test profile at your real campus data except in the checks below that are about 
 - [ ] Push the installer backup tag: `git push origin v0.1.0-instalador`. Optionally create a release on that tag and attach the old `UnioviVirtual-Setup-0.1.0.exe` (rebuild it with `git checkout v0.1.0-instalador && npm ci && npm run package` if you no longer have it; mark it as not latest).
 
 **Each version:**
-- [ ] Bump `version` in `extension/manifest.json`. Do **not** touch the manifest `key` (the ID, and with it the students' stored files and links, depends on it).
-- [ ] `npm run typecheck && npm test && npm run build && npm run package`. This writes `release/uniovi-virtual-<version>.zip` and `release/uniovi-virtual.zip` (same bytes).
+- [ ] Bump `version` in `extension/manifest.json` and in the root `package.json` (a test checks they match). Do **not** touch the manifest `key` (the ID, and with it the students' stored files and links, depends on it).
+- [ ] `npm run typecheck && npm test && npm run build && npm run package`. This writes `release/uniovi-virtual-<version>.zip` and `release/uniovi-virtual.zip` (same bytes). It refuses while `RELAY_URL` is still the `example.workers.dev` placeholder (deploy the relay first). For a local test zip only: `ALLOW_PLACEHOLDER_RELAY=1 npm run package` (never publish that zip).
 - [ ] Create a GitHub Release with tag `v<version>` and attach **both** zips. It must be marked *latest*: the download button points at `releases/latest/download/uniovi-virtual.zip`, and the extension's daily update check reads `releases/latest`.
 - [ ] Click **Descargar** on the Pages site: the new zip downloads.
 
@@ -52,6 +52,8 @@ On the real sites, logged in:
 - [ ] claude.ai: **Conectar automáticamente** asks for the claude.ai permission only at click time, opens the connector page and fills name + URL. Only the AI's own confirm button is left. Confirm → it works in a chat.
 - [ ] chatgpt.com: the same, on a Plus account.
 - [ ] Gemini: the card says it is probably not available; if a form exists, try it.
+- [ ] After each fill (done or not), `chrome://extensions` → Uniovi Virtual → Detalles → Acceso a sitios no lists the AI site any more (the permission is given back at once).
+- [ ] On a page that also shows another form or dialog with an "Add" / "Create" button, auto-fill never presses it.
 - [ ] Deny the permission, or break a selector on purpose (edit the selector file, rebuild): it falls back to Copiar with a note.
 - [ ] Installing the extension showed no extra permission warning for the AI sites.
 
@@ -76,7 +78,7 @@ With a real install that has synced and has a connected AI:
 - [ ] Opens from the popup and from the campus panel. Courses → sections → files match the campus.
 - [ ] Sort by name, date and course; the filter box narrows the list; text search finds a phrase inside a PDF.
 - [ ] "Nuevo" marks appear for files since the last visit and clear after it.
-- [ ] Open two PDFs (e.g. exercises and solutions) with **Abrir en ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
+- [ ] Open two PDFs (e.g. exercises and solutions) with **Ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
 - [ ] A .docx / .pptx offers **Descargar** and saves one copy. A zip shows as a campus link.
 
 ## 7. Sync on the real campus
@@ -87,7 +89,7 @@ With a real install that has synced and has a connected AI:
 - [ ] Materials: compare 2–3 courses on the campus with Mis apuntes / `list_materials` (folders, PDFs, slides, links).
 - [ ] Downloaded files open and are not HTML login pages (the real redirect path is not covered by tests).
 - [ ] A second sync is incremental: noticeably faster, no re-download of unchanged files.
-- [ ] Notifications: a new important announcement triggers one notification when "Notify me" is on.
+- [ ] Notifications: a new important announcement triggers one notification when «Avisarme de anuncios nuevos» is on (popup → Opciones avanzadas).
 
 ## 8. Efficiency (time it)
 
@@ -107,7 +109,7 @@ Also watch: Chrome's CPU while idle with the AI connection on (Task Manager → 
 ## 9. Privacy and safety
 
 - [ ] Nothing in the chats shows the campus password or session cookie.
-- [ ] Cambiar enlace: the old link gives 404 in the AI; the new one works.
+- [ ] Cambiar enlace (popup → Opciones avanzadas): the old link now gives the "Uniovi Virtual no está conectado" message in the AI (it points at an id nobody answers any more), even with Chrome open; the new one works after pasting it.
 - [ ] The extension never posts or submits anything on the campus.
 - [ ] Cloudflare dashboard → the Worker: logs/observability are off; the Durable Object stores only the secret hash.
 

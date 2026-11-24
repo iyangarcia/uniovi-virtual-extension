@@ -38,10 +38,19 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
     const dialogs = () => [...document.querySelectorAll("[role='dialog'], [role='alertdialog'], dialog[open]")].filter(visible);
 
     const CLICKABLE = "button, [role='button'], [role='menuitem'], [role='option'], [role='tab'], [role='link'], a[href], li[tabindex], div[tabindex]";
+    const FIELD = "input:not([type='hidden']), textarea, select";
+    const CARD = "article, [role='article'], li, [role='listitem'], [role='group'], fieldset, [class*='card' i]";
+    // Never a button that could submit or confirm something: on the real sites a generic "Add" or
+    // "Create" may also be the confirm button of some other form or dialog.
+    const unsafe = (el: HTMLElement) =>
+      /^submit$/i.test(el.getAttribute("type") ?? "") ||
+      !!el.closest("form") ||
+      !!el.closest("[role='dialog'], [role='alertdialog'], dialog")?.querySelector(FIELD) ||
+      !!el.closest(CARD)?.querySelector(FIELD);
     const findClickable = (patterns: string[]): HTMLElement | undefined => {
       let best: { el: HTMLElement; len: number } | undefined;
       for (const el of document.querySelectorAll<HTMLElement>(CLICKABLE)) {
-        if (!visible(el)) continue;
+        if (!visible(el) || unsafe(el)) continue;
         const texts = [norm(el.innerText || el.textContent), norm(el.getAttribute("aria-label")), norm(el.getAttribute("title"))];
         const hit = texts.find((t) => matches(t, patterns));
         // The shortest matching text is the most specific element (a button, not the card around it).

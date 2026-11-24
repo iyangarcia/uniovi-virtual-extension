@@ -1,5 +1,5 @@
 import { AGENT_PING_MS, MAX_INFLIGHT, PING, PONG, RELAY_PROTOCOL, type AgentHello, type RelayResponse } from "../../../shared/relay.ts";
-import { answer, backoffMs, busyResponse, parseRelayMessage, type RequestHandler } from "./protocol.ts";
+import { answer, backoffMs, busyResponse, parseRelayMessage, pathHasToken, type RequestHandler } from "./protocol.ts";
 import type { AgentStateName } from "./state.ts";
 
 // The agent's WebSocket to the relay: hello, keepalive ping, reconnect with backoff, and answering
@@ -17,6 +17,7 @@ export interface WebSocketLike {
   onerror: ((ev: unknown) => void) | null;
 }
 
+/** "request": a relayed request carrying the current token (wrong-token requests aren't reported). */
 export type AgentEvent = "connect" | "pong" | "close" | "request";
 
 export interface AgentOptions {
@@ -168,7 +169,9 @@ export class AgentConnection {
         this.stop("rejected", msg.reason);
         return;
       case "request":
-        this.o.onEvent?.("request");
+        // Counted only with the right token ("AI connected" on the welcome page): a wrong-token
+        // request (an old link, a guess) is answered 404 by answer() and isn't an AI of ours.
+        if (pathHasToken(msg.path, this.o.token())) this.o.onEvent?.("request");
         if (this.inflight >= MAX_INFLIGHT) return this.reply(ws, busyResponse(msg.rid));
         this.inflight++;
         void answer(msg, this.o.token(), this.o.handler)

@@ -9,7 +9,8 @@
 //                            ─── RelayResponse ──► Durable Object ──► HTTP response to the AI
 //
 // Connector URL given to the student: `${RELAY_URL}/mcp/${id}/${token}` (stable; "Cambiar enlace"
-// rotates `token` only).
+// replaces both `id` and `token`, so the old URL reaches a Durable Object no agent connects to any
+// more (503). The secret stays: the new Durable Object binds it on the first hello).
 //
 // Agent connection: `new WebSocket(`${RELAY_WS_URL}/agent/${id}`)`, then the agent sends AgentHello
 // as its first message. Browsers can't set headers on a WebSocket, hence the hello message.

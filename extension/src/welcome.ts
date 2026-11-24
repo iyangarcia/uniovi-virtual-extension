@@ -1,6 +1,6 @@
 // Welcome page: opened on install and from the popup ("Cómo conectarla"). Three live steps:
 // extension installed, campus synced once, AI connected (an AI has made a request). Everything is
-// built with textContent; the page re-renders on chrome.storage changes.
+// built with textContent; the page re-renders when one of its chrome.storage keys changes.
 import { AGENT_KEYS, aiConnectionEnabled, type AgentState, type AgentStats } from "./agent/state.ts";
 import { AI_SPECS, autoConnect, DEV_AUTOFILL_KEY } from "./autofill/index.ts";
 import type { AiId } from "./autofill/types.ts";
@@ -109,10 +109,14 @@ function setStep(el: HTMLElement, done: boolean, n: string) {
   el.querySelector(".mark")!.textContent = done ? "✓" : n;
 }
 
+// Only these keys change what the page shows. The snapshot itself is not one: it is large, and
+// syncState.lastSync already says whether a sync happened.
+const KEYS = [AGENT_KEYS.enabled, AGENT_KEYS.state, AGENT_KEYS.stats, AGENT_KEYS.identity, AGENT_KEYS.devRelayUrl, "syncState", UPDATE_KEYS.update, DEV_AUTOFILL_KEY] as const;
+
 async function render() {
-  const got = await chrome.storage.local.get([AGENT_KEYS.enabled, AGENT_KEYS.state, AGENT_KEYS.stats, "syncState", "snapshot", UPDATE_KEYS.update, DEV_AUTOFILL_KEY]);
+  const got = await chrome.storage.local.get([...KEYS]);
   const sync = got.syncState as SyncState | undefined;
-  const synced = !!sync?.lastSync || !!got.snapshot;
+  const synced = !!sync?.lastSync;
   const agent = got[AGENT_KEYS.state] as AgentState | undefined;
   const stats = got[AGENT_KEYS.stats] as AgentStats | undefined;
   devUrls = (got[DEV_AUTOFILL_KEY] as typeof devUrls | undefined) ?? {};
@@ -153,7 +157,7 @@ $("openFiles").addEventListener("click", (e) => {
 });
 $("cards").replaceChildren(...(Object.keys(AI_SPECS) as AiId[]).map(card));
 
-chrome.storage.onChanged.addListener((_changes, area) => {
-  if (area === "local") void render();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && KEYS.some((k) => k in changes)) void render();
 });
 void render();

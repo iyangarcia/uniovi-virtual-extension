@@ -30,7 +30,7 @@ export function statusSentence({ enabled, agent, synced }: StatusInput): StatusV
     case "offline":
       return { tone: "error", text: "Sin conexión ahora mismo", hint: "Comprueba tu Internet. Se vuelve a intentar solo." };
     case "rejected":
-      return { tone: "error", text: "No se pudo conectar", hint: "Apaga y vuelve a encender «Conectar con mi IA». Si sigue igual, pulsa «Cambiar enlace» en Opciones avanzadas." };
+      return { tone: "error", text: "No se pudo conectar", hint: "Apaga y vuelve a encender «Conectar con mi IA». Si sigue igual, pulsa «Cambiar enlace» en Opciones avanzadas y pega el enlace nuevo en tu IA." };
     default:
       // "connecting", "off" while starting up, or nothing written yet.
       return { tone: "busy", text: "Conectando…" };

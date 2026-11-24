@@ -1,6 +1,9 @@
 import { strFromU8, unzipSync } from "fflate";
 import { extractText } from "unpdf";
+import { type FileKind, kindOf } from "./kind.ts";
 import type { DataStore, StoredFile } from "./store.ts";
+
+export { extname, type FileKind, kindOf } from "./kind.ts";
 
 // Plain-text extraction so an AI can read lecture material through MCP. Storage-independent: the
 // bytes and the text cache come from a DataStore (files on disk in the server, IndexedDB in the
@@ -15,13 +18,6 @@ const decodeXml = (s: string) =>
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
     .replace(/&amp;/g, "&");
-
-/** Extension of the last path segment, with the dot ("" if none), like node:path's extname. */
-export function extname(path: string): string {
-  const base = path.slice(path.lastIndexOf("/") + 1);
-  const dot = base.lastIndexOf(".");
-  return dot > 0 ? base.slice(dot) : "";
-}
 
 async function pdfText(bytes: Uint8Array): Promise<string> {
   const { text } = await extractText(bytes, { mergePages: false });
@@ -58,18 +54,6 @@ function docxText(bytes: Uint8Array): string {
   const files = unzipSync(bytes, { filter: (f) => f.name === "word/document.xml" });
   const xml = files["word/document.xml"];
   return xml ? officeXmlText(strFromU8(xml), "w:p", "w:t") : "";
-}
-
-export type FileKind = "pdf" | "pptx" | "docx" | "text" | "other";
-
-export function kindOf(f: Pick<StoredFile, "path" | "contentType">): FileKind {
-  const ext = extname(f.path).toLowerCase();
-  if (ext === ".pdf" || f.contentType.includes("pdf")) return "pdf";
-  if (ext === ".pptx") return "pptx";
-  if (ext === ".docx") return "docx";
-  if ([".txt", ".md", ".csv", ".json", ".c", ".java", ".py", ".js", ".ts", ".sql", ".xml", ".html"].includes(ext)) return "text";
-  if (f.contentType.startsWith("text/")) return "text";
-  return "other";
 }
 
 /** Extracts text from raw bytes of the given kind (no caching). */

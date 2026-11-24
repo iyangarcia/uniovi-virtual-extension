@@ -1,47 +1,13 @@
 import type { Snapshot } from "../types.ts";
-import { fold, matchCourses, UserError, NO_DATA, when } from "./common.ts";
-import { cachedTextOf, isWarming, kindOf, textOf, warmTextCache } from "./extract.ts";
-import type { DataStore, StoredFile } from "./store.ts";
+import { fold, when } from "./common.ts";
+import { cachedTextOf, isWarming, textOf, warmTextCache } from "./extract.ts";
+import { type MaterialHit, scanMaterials, type SearchMaterialsOptions, type SearchMaterialsResult } from "./scan.ts";
+import type { DataStore } from "./store.ts";
 
-// Full-text search over the extracted text of stored files. Used by the search_materials and
-// search tools, and reusable by an in-extension file browser ("Mis apuntes").
+// Full-text search over the extracted text of stored files, for the search_materials and search
+// tools. Files not extracted yet are extracted inline within a time budget (scan.ts has the scanner).
 
-export interface MaterialHit {
-  /** Resource key of the file (StoredFile.key). */
-  key: string;
-  courseId: number;
-  /** Course short name, when the snapshot knows the course. */
-  course?: string;
-  section: string;
-  /** Activity name (Resource.name). */
-  name: string;
-  filename?: string;
-  /** "page 3" / "slide 2" from the extraction markers, or "" before the first marker. */
-  location: string;
-  locationKind?: "page" | "slide";
-  locationNumber?: number;
-  snippet: string;
-}
-
-export interface SearchMaterialsOptions {
-  query: string;
-  /** Course filter as the tools take it: id, short name or part of the name (accent-insensitive). */
-  course?: string;
-  /** Exact course id filter (combined with `course` if both are given). */
-  courseId?: number;
-  /** Max hits (default 30). */
-  limit?: number;
-  /** Snapshot to use; read from the store when omitted. */
-  snapshot?: Snapshot | null;
-}
-
-export interface SearchMaterialsResult {
-  results: MaterialHit[];
-  /** Searchable files considered. */
-  scanned: number;
-  /** Files skipped because their text isn't extracted yet (background indexing was started). */
-  pending: number;
-}
+export type { MaterialHit, SearchMaterialsOptions, SearchMaterialsResult } from "./scan.ts";
 
 /** "Material 3 (tema3.pdf)", the file label the tools print. */
 export const hitFile = (h: Pick<MaterialHit, "name" | "filename">) => `${h.name} (${h.filename})`;
@@ -50,63 +16,16 @@ export const hitFile = (h: Pick<MaterialHit, "name" | "filename">) => `${h.name}
 export const searchBudget = { ms: 20_000 };
 
 export async function searchMaterials(store: DataStore, opts: SearchMaterialsOptions): Promise<SearchMaterialsResult> {
-  const { query, course, courseId, limit = 30 } = opts;
-  const s = opts.snapshot !== undefined ? opts.snapshot : await store.snapshot();
-  if (!s && course) throw new UserError(NO_DATA);
-  const ids = s ? new Set(matchCourses(s, course).map((c) => c.id)) : null;
-  const files = Object.values(await store.index()).filter(
-    (f: StoredFile) =>
-      (!ids || ids.has(f.resource.courseId)) && (courseId === undefined || f.resource.courseId === courseId) && kindOf(f) !== "other",
-  );
-  const courseName = (id: number) => s?.courses.find((c) => c.id === id)?.shortname;
-  const terms = fold(query).split(/\s+/).filter(Boolean);
-  const results: MaterialHit[] = [];
   const deadline = Date.now() + searchBudget.ms;
-  let pending = 0;
-  for (const f of files) {
+  const { results, scanned, pending, files } = await scanMaterials(store, opts, async (f) => {
     // A cold cache takes over a minute to build, longer than remote clients wait: past the budget,
     // or while the background indexer runs, only already-extracted files are searched.
     const extract = Date.now() < deadline && !isWarming(store);
     const text = await (extract ? textOf(store, f) : cachedTextOf(store, f)).catch(() => null);
-    if (text === null && !extract) pending++;
-    if (!text) continue;
-    let location = "";
-    let locationKind: "page" | "slide" | undefined;
-    let locationNumber: number | undefined;
-    const lines = text.split("\n");
-    // Fold once per file (not once per line window): warm searches over ~300 files went from ~2 s to well under 1 s.
-    const folded = fold(text).split("\n");
-    const same = folded.length === lines.length;
-    for (let i = 0; i < lines.length && results.length < limit; i++) {
-      const marker = /^--- (page|slide) (\d+) ---$/.exec(lines[i]!);
-      if (marker) {
-        location = `${marker[1]} ${marker[2]}`;
-        locationKind = marker[1] as "page" | "slide";
-        locationNumber = Number(marker[2]);
-        continue;
-      }
-      const line = same ? folded[i]! : fold(lines[i]!);
-      if (!terms.some((t) => line.includes(t))) continue;
-      const windowText = same ? folded.slice(i, i + 3).join(" ") : fold(lines.slice(i, i + 3).join(" "));
-      if (terms.every((t) => windowText.includes(t))) {
-        results.push({
-          key: f.key,
-          courseId: f.resource.courseId,
-          course: courseName(f.resource.courseId),
-          section: f.resource.section,
-          name: f.resource.name,
-          filename: f.resource.filename,
-          location,
-          locationKind,
-          locationNumber,
-          snippet: lines.slice(Math.max(0, i - 1), i + 3).join(" ").replace(/\s+/g, " ").slice(0, 400),
-        });
-      }
-    }
-    if (results.length >= limit) break;
-  }
+    return text === null && !extract ? undefined : text;
+  });
   if (pending) void warmTextCache(store, files);
-  return { results, scanned: files.length, pending };
+  return { results, scanned, pending };
 }
 
 // ChatGPT's connector convention (also used by deep research): `search` returns

@@ -1,9 +1,9 @@
 import type { Resource, Snapshot } from "../../shared/types.ts";
 import { collect } from "./collector.ts";
+import { decideResponse, type KnownFile, needsDownload, readLimited } from "./download.ts";
 import { getSettings, send, type Message, type Reply } from "./messages.ts";
 import { MoodleClient, readPageConfig } from "./moodle.ts";
 import { isDashboard, mountPanel } from "./panel.ts";
-import { isReadableFile } from "./readable.ts";
 
 let running = false;
 
@@ -63,13 +63,13 @@ async function runSync() {
 
 /**
  * Downloads new/changed readable files into the extension's storage (via the background). Needs
- * the campus tab (same-origin fetch with the session cookie). Archives, binaries and media are not
- * downloaded: they stay campus links in the snapshot.
+ * the campus tab (same-origin fetch with the session cookie). Archives, binaries, media and files
+ * over the size limit are not downloaded: they stay campus links in the snapshot (see download.ts).
  */
 async function uploadPendingFiles(reportProgress: boolean): Promise<{ uploaded: number; failed: number }> {
   const settings = await getSettings();
   if (!settings.downloadFiles) return { uploaded: 0, failed: 0 };
-  const known = await send<Record<string, number>>({ type: "known-files" });
+  const known = await send<Record<string, KnownFile>>({ type: "known-files" });
   const { snapshot } = (await chrome.storage.local.get("snapshot")) as { snapshot?: Snapshot };
   if (!snapshot) return { uploaded: 0, failed: 0 };
   const maxBytes = settings.maxFileMB * 1024 * 1024;
@@ -88,47 +88,27 @@ async function uploadPendingFiles(reportProgress: boolean): Promise<{ uploaded: 
   return { uploaded, failed };
 }
 
-function needsDownload(r: Resource, known: Record<string, number>, maxBytes: number): boolean {
-  if (r.modname !== "resource" && r.modname !== "folder" && r.modname !== "section-file") return false;
-  if (r.filesize !== undefined && r.filesize > maxBytes) return false;
-  if (isReadableFile(r) === false) return false;
-  const stored = known[r.key];
-  if (stored === undefined) return true;
-  return r.timemodified !== undefined && r.timemodified > stored;
-}
-
-/** Returns false when the file turned out not to be a readable type (recorded, not downloaded). */
+/** Returns false when the file is not stored: not a readable type or too large (recorded, so not fetched again). */
 async function uploadFile(r: Resource, maxBytes: number): Promise<boolean> {
   const res = await fetch(r.url, { credentials: "same-origin" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const contentType = res.headers.get("content-type") ?? "application/octet-stream";
-  // A resource set to "embed"/"open" without redirect, or a login page, comes back as HTML.
-  if (contentType.startsWith("text/html")) throw new Error("Got an HTML page instead of a file");
-  const filename = r.filename ?? filenameFrom(res) ?? `${r.name}`;
-  // `/mod/resource/view.php` links only reveal the file name and type after the redirect.
-  if (isReadableFile({ filename, mimetype: contentType.split(";")[0] }) !== true) {
+  const d = decideResponse(r, res, maxBytes);
+  if (d.action !== "store") {
     await res.body?.cancel().catch(() => undefined);
-    await send({ type: "skip-file", resource: { ...r, filename } });
+    if (d.action === "fail") throw new Error(d.error);
+    await send({ type: "skip-file", resource: { ...r, filename: d.filename } });
     return false;
   }
-  const buf = await res.arrayBuffer();
-  if (buf.byteLength > maxBytes) throw new Error("File too large");
-  await send({ type: "upload-file", resource: r, filename, contentType, base64: toBase64(buf) });
+  // No (or a wrong) Content-Length: stop the download as soon as it passes the limit.
+  const bytes = await readLimited(res.body, maxBytes);
+  if (!bytes) {
+    await send({ type: "skip-file", resource: { ...r, filename: d.filename } });
+    return false;
+  }
+  await send({ type: "upload-file", resource: r, filename: d.filename, contentType: d.contentType, base64: toBase64(bytes) });
   return true;
 }
 
-function filenameFrom(res: Response): string | undefined {
-  const cd = res.headers.get("content-disposition") ?? "";
-  const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(cd)?.[1];
-  if (star) return decodeURIComponent(star.replace(/"/g, ""));
-  const plain = /filename="?([^";]+)"?/i.exec(cd)?.[1];
-  if (plain) return plain;
-  const last = new URL(res.url).pathname.split("/").pop();
-  return last ? decodeURIComponent(last) : undefined;
-}
-
-function toBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
+function toBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
     bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

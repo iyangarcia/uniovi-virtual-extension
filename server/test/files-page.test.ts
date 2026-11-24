@@ -128,13 +128,30 @@ test("entries: stored files plus skipped ones, in campus order, unknown last", (
   assert.equal(zip.stored, false);
   assert.equal(zip.type, "other");
   assert.equal(entries.find((e) => e.key === "1:/tema1.pdf")!.stored, true);
-  // A resource neither stored nor skipped (still downloading) isn't listed.
+  // A readable resource neither stored nor skipped (still downloading) isn't listed; the zip is,
+  // because its name already says it stays on the campus.
   const partial = buildEntries(snapshot, {}, {});
-  assert.equal(partial.length, 0);
+  assert.deepEqual(keys(partial), ["4"]);
   // Folder files show their file name; resources their activity name.
   assert.equal(displayTitle(resources[5]!), "zz-diagrama.png");
   assert.equal(displayTitle(resources[0]!), "Apuntes tema 1");
   assert.equal(buildEntries(null, {}, {}).length, 0);
+});
+
+test("entries: an archive inside a folder or a section is listed as a campus link without ever being skipped", () => {
+  const folderZip: Resource = { ...res(7, 10, "Tema 1", "Material", "x.zip", 0, "folder"), key: "7:/x.zip", timemodified: undefined };
+  const sectionVideo: Resource = { ...res(0, 10, "Tema 2", "clase.mp4", "clase.mp4", 0, "section-file"), key: "section3:/clase.mp4", timemodified: undefined };
+  // Links, pages and forums are not files: never listed even with an unknown extension.
+  const link: Resource = { ...res(8, 10, "Tema 1", "Web", "web.zip", 0, "url"), key: "8:link" };
+  const pending: Resource = { ...res(9, 10, "Tema 1", "Tema", "tema.pdf", 0, "folder"), key: "9:/tema.pdf" };
+  const list = buildEntries({ ...snapshot, resources: [folderZip, sectionVideo, link, pending] }, {}, {});
+  assert.deepEqual(list.map((e) => e.key), ["7:/x.zip", "section3:/clase.mp4"]);
+  const zip = list[0]!;
+  assert.equal(zip.stored, false);
+  assert.equal(zip.title, "x.zip");
+  assert.equal(zip.type, "other");
+  assert.equal(zip.date, 0);
+  assert.equal(zip.url, folderZip.url);
 });
 
 test("grouping by course and section follows the campus order", () => {
@@ -216,6 +233,14 @@ test("deep links, campus links and download names are sanitised", () => {
   assert.equal(safeCampusUrl("javascript:alert(1)"), null);
   assert.equal(safeCampusUrl("not a url"), null);
   assert.equal(safeCampusUrl("https://www.campusvirtual.uniovi.es/x"), "https://www.campusvirtual.uniovi.es/x");
+  assert.equal(safeCampusUrl("https://campusvirtual.uniovi.es/x"), "https://campusvirtual.uniovi.es/x");
+  // Only https and only the campus: no plain http, no other sites, no look-alike hosts.
+  assert.equal(safeCampusUrl("http://www.campusvirtual.uniovi.es/x"), null);
+  assert.equal(safeCampusUrl("https://example.com/x"), null);
+  assert.equal(safeCampusUrl("https://evilcampusvirtual.uniovi.es/x"), null);
+  assert.equal(safeCampusUrl("https://campusvirtual.uniovi.es.evil.com/x"), null);
+  assert.equal(safeCampusUrl("https://campusvirtual.uniovi.es@evil.com/x"), null);
+  assert.equal(safeCampusUrl("data:text/html,hi"), null);
   assert.equal(downloadName({ filename: "a/b:c.docx", title: "T" }), "a_b_c.docx");
   assert.equal(downloadName({ title: "Guion" }), "Guion");
 });

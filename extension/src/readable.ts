@@ -57,3 +57,6 @@ export function isReadableFile(f: { filename?: string; mimetype?: string }): boo
   // An unknown extension with no type information: not something the AI or viewer can open.
   return ext ? false : undefined;
 }
+
+/** A file on the campus (not a link, page or forum): what the collector may download. */
+export const isCampusFile = (r: { modname: string }) => r.modname === "resource" || r.modname === "folder" || r.modname === "section-file";

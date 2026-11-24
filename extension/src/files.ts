@@ -1,7 +1,7 @@
 // "Mis apuntes": the student's synced course files, read straight from the extension's IndexedDB.
 // Courses → sections → files, filter, sort, search inside the text, open in a new tab or window.
 // Campus strings are untrusted: everything is built with createElement + textContent.
-import { searchMaterials, type MaterialHit } from "../../shared/mcp/search.ts";
+import { searchCachedMaterials, type MaterialHit } from "../../shared/mcp/scan.ts";
 import type { Snapshot } from "../../shared/types.ts";
 import {
   blobMime,
@@ -235,7 +235,8 @@ async function searchInside(): Promise<void> {
   results.replaceChildren(el("div", { className: "results-head" }, el("h2", { text: `Buscando «${query}» dentro de los apuntes…` })));
   searchBtn.disabled = true;
   try {
-    const r = await searchMaterials(idbStore, { query, limit: 60, snapshot });
+    // Cached text only: the service worker extracts files in the background (no PDF parser in this page).
+    const r = await searchCachedMaterials(idbStore, { query, limit: 60, snapshot });
     if (seq !== searchSeq) return;
     renderResults(query, r.results, r.pending);
   } catch (err) {

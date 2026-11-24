@@ -15,6 +15,11 @@ import type { BridgeStatus, Snapshot } from "../../shared/types.ts";
 process.env.UNIOVI_DATA_DIR = mkdtempSync(join(tmpdir(), "uniovi-checks-test-"));
 const store = await import("../src/store.ts");
 const mcp = await import("../src/mcp.ts");
+// The tools themselves live in shared/mcp/; remote mode is what the extension serves to web AIs.
+const core = await import("../../shared/mcp/server.ts");
+const search = await import("../../shared/mcp/search.ts");
+const fetchById = (s: Snapshot, id: string) => core.fetchById(store.nodeStore, s, id);
+const searchAll = (s: Snapshot, query: string, limit?: number) => search.searchAll(store.nodeStore, s, query, limit);
 const bridge = await import("../src/http.ts");
 
 const now = Math.floor(Date.now() / 1000);
@@ -47,7 +52,7 @@ before(async () => {
 const text = (r: unknown) => (r as { content: Array<{ text: string }> }).content[0]!.text;
 
 async function inMemoryClient(remoteMode: boolean) {
-  const server = mcp.createMcpServer({ remote: remoteMode });
+  const server = remoteMode ? core.createMcpServer(store.nodeStore, { remote: true }) : mcp.createMcpServer();
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
   const client = new Client({ name: "test", version: "0" });
@@ -55,7 +60,7 @@ async function inMemoryClient(remoteMode: boolean) {
   return client;
 }
 
-// ---------------------------------------------------------------- mcp.ts remote mode
+// ---------------------------------------------------------------- remote mode (shared core) vs the Node server
 
 test("remote: sync_status and list_materials hide local paths, local mode shows them", async () => {
   const r = await inMemoryClient(true);
@@ -83,11 +88,11 @@ test("remote: read_material on an unsupported file gives the campus url, not the
 });
 
 test("fetch(material) never reveals local paths", async () => {
-  const doc = await mcp.fetchById(snap, "material:5:/apuntes.txt");
+  const doc = await fetchById(snap, "material:5:/apuntes.txt");
   assert.match(doc.text, /url: https:\/\/campus\/r\/5/);
   assert.doesNotMatch(doc.text, /localPath/);
   assert.ok(!doc.text.includes(store.dataDir));
-  const bin = await mcp.fetchById(snap, "material:6:/datos.bin");
+  const bin = await fetchById(snap, "material:6:/datos.bin");
   assert.doesNotMatch(bin.text, /localPath/);
 });
 
@@ -103,7 +108,7 @@ test("search tool returns exactly {results:[{id,title,url}]}", async () => {
 });
 
 test("fetch(post) has the connector shape too", async () => {
-  const doc = await mcp.fetchById(snap, "post:10");
+  const doc = await fetchById(snap, "post:10");
   assert.deepEqual(Object.keys(doc).sort(), ["id", "metadata", "text", "title", "url"]);
   assert.equal(doc.id, "post:10");
   assert.equal(doc.title, "Parcial");
@@ -125,12 +130,12 @@ test("fetch errors are user errors naming the problem", async () => {
 });
 
 test("searchAll: one result per file, posts need every term, newest post first, limit honoured", async () => {
-  const hits = await mcp.searchAll(snap, "entropia");
+  const hits = await searchAll(snap, "entropia");
   assert.deepEqual(hits.map((h) => h.id), ["material:5:/apuntes.txt"]);
 
-  assert.deepEqual((await mcp.searchAll(snap, "examen diciembre")).map((h) => h.id), ["post:10"]);
-  assert.deepEqual((await mcp.searchAll(snap, "examen")).map((h) => h.id), ["post:11", "post:10"]);
-  assert.equal((await mcp.searchAll(snap, "examen", 1)).length, 1);
+  assert.deepEqual((await searchAll(snap, "examen diciembre")).map((h) => h.id), ["post:10"]);
+  assert.deepEqual((await searchAll(snap, "examen")).map((h) => h.id), ["post:11", "post:10"]);
+  assert.equal((await searchAll(snap, "examen", 1)).length, 1);
 });
 
 // ---------------------------------------------------------------- http.ts (ingest bridge)

@@ -6,5 +6,3 @@ import { nodeStore, type StoredFile } from "./store.ts";
 export const kindOf = core.kindOf;
 export const textOf = (f: StoredFile) => core.textOf(nodeStore, f);
 export const cachedTextOf = (f: StoredFile) => core.cachedTextOf(nodeStore, f);
-export const isWarming = () => core.isWarming(nodeStore);
-export const warmTextCache = (files: StoredFile[]) => core.warmTextCache(nodeStore, files);

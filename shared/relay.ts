@@ -31,6 +31,12 @@
 //    the hash.
 //  - Only REQUEST_HEADERS are forwarded to the agent, and only RESPONSE_HEADERS back to the client.
 //  - Any other path on the relay → 404. CORS is not needed (AI clients call server-side).
+//  - Only the not-connected 503 has a JSON body; 413/429/502/504 and the in-flight 503 are text/plain.
+//    The relay also rate-limits each student (relay/src/logic.ts RATE_LIMIT_PER_MINUTE → 429).
+//  - The agent answers only POST (stateless MCP, JSON responses); GET/DELETE → 405 with `allow: POST`,
+//    so the SDK client does not hold a GET SSE stream open until the relay timeout.
+//  - Hello timeouts are reported as RelayRejected { reason: "bad-hello" }.
+//  - Tests point the extension at a local relay with chrome.storage.local.devRelayUrl (dev only).
 
 /** Set after `npx wrangler deploy` (see relay/DESPLIEGUE.md). No trailing slash. */
 export const RELAY_URL = "https://uniovi-relay.example.workers.dev";

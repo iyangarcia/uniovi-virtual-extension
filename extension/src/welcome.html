@@ -2,9 +2,110 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <title>Uniovi Virtual</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Uniovi Virtual: cómo empezar</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f6f9; --card: #ffffff; --fg: #1d2125; --muted: #5a6470; --line: #dde3ea; --soft: #eef2f7;
+        --accent: #1559b5; --accent-fg: #ffffff; --ok: #1b7a32; --ok-bg: #e6f4ea; --busy: #8a5a00; --busy-bg: #fff4d6;
+        --err: #b3261e; --err-bg: #fde8e7; --off: #5a6470; --off-bg: #eceff3;
+        font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15181c; --card: #1f2328; --fg: #e8eaed; --muted: #a3adb8; --line: #343a42; --soft: #2a2f35;
+          --accent: #6ea8ff; --accent-fg: #0b1a33; --ok: #7ad08f; --ok-bg: #17321f; --busy: #f2c35b; --busy-bg: #3a2f12;
+          --err: #ff8a80; --err-bg: #3d1a18; --off: #a3adb8; --off-bg: #2a2f35;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--fg); }
+      main { max-width: 940px; margin: 0 auto; padding: 32px 16px 48px; }
+      .hero { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+      .hero img { width: 64px; height: 64px; }
+      h1 { font-size: 30px; margin: 0; line-height: 1.2; }
+      .hero p { margin: 4px 0 0; color: var(--muted); }
+      .step { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin: 14px 0; display: flex; gap: 16px; }
+      .mark { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 18px; background: var(--soft); color: var(--muted); }
+      .step.done .mark { background: var(--ok); color: #fff; }
+      .step .body { flex: 1; min-width: 0; }
+      h2 { font-size: 21px; margin: 6px 0 4px; }
+      .step p { margin: 4px 0; }
+      .muted { color: var(--muted); }
+      button, .btn { font: inherit; cursor: pointer; border-radius: 12px; display: inline-block; text-decoration: none; }
+      .big { padding: 12px 22px; font-size: 17px; font-weight: 700; border: 0; background: var(--accent); color: var(--accent-fg); margin-top: 10px; }
+      .plain { padding: 10px 16px; font-weight: 600; border: 1px solid var(--line); background: var(--soft); color: var(--fg); }
+      .status { display: inline-block; border-radius: 999px; padding: 6px 14px; font-weight: 650; margin: 8px 0 4px; font-size: 16px; }
+      .status.ok { background: var(--ok-bg); color: var(--ok); }
+      .status.busy { background: var(--busy-bg); color: var(--busy); }
+      .status.error { background: var(--err-bg); color: var(--err); }
+      .status.off { background: var(--off-bg); color: var(--off); }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 14px; }
+      .card { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; background: var(--card); }
+      .card h3 { margin: 0 0 6px; font-size: 20px; }
+      .card .plan { font-size: 14px; border-radius: 8px; padding: 6px 10px; background: var(--soft); margin: 0 0 10px; }
+      .card .plan.warn { background: var(--busy-bg); color: var(--busy); }
+      .card .actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+      .card .actions .big { margin-top: 0; width: 100%; }
+      .card .actions .plain { width: 100%; }
+      .card ol { margin: 4px 0 0; padding-left: 22px; font-size: 15px; }
+      .card li { margin: 3px 0; }
+      .result { font-size: 15px; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+      .result.ok { background: var(--ok-bg); color: var(--ok); }
+      .result.warn { background: var(--busy-bg); color: var(--busy); }
+      .update { border: 2px solid var(--accent); background: var(--card); border-radius: 16px; padding: 14px 18px; margin: 0 0 14px; }
+      .update ol { margin: 6px 0; }
+      .update p { margin: 0; color: var(--muted); font-size: 15px; }
+      .update a { color: var(--accent); font-weight: 700; }
+      .maint { font-size: 13px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 10px; margin: 0 0 14px; }
+      footer { margin-top: 24px; font-size: 15px; color: var(--muted); }
+      footer a { color: var(--accent); }
+      @media (max-width: 560px) { h1 { font-size: 24px; } .step { padding: 16px; gap: 12px; } .mark { width: 32px; height: 32px; font-size: 16px; } }
+    </style>
   </head>
   <body>
+    <main>
+      <div class="hero">
+        <img src="icons/icon128.png" alt="" />
+        <div>
+          <h1>¡Ya casi está!</h1>
+          <p>Tres pasos y tu IA podrá ayudarte con tus apuntes y avisos del Campus Virtual.</p>
+        </div>
+      </div>
+      <div id="maint" class="maint" hidden>El servicio de conexión aún no está configurado (falta desplegar el relay).</div>
+      <div id="update"></div>
+
+      <section class="step done" id="step1">
+        <div class="mark">✓</div>
+        <div class="body"><h2>Extensión instalada ✓</h2><p class="muted">Ya está en tu Chrome. Puedes abrirla con el icono de Uniovi Virtual (arriba a la derecha, en la pieza de puzle 🧩).</p></div>
+      </section>
+
+      <section class="step" id="step2">
+        <div class="mark">2</div>
+        <div class="body">
+          <h2>Entra en el Campus Virtual</h2>
+          <p id="step2text">Inicia sesión como siempre. La extensión trae tus apuntes sola (la primera vez tarda un poco).</p>
+          <button class="big" id="openCampus">Abrir el Campus Virtual</button>
+        </div>
+      </section>
+
+      <section class="step" id="step3">
+        <div class="mark">3</div>
+        <div class="body">
+          <h2>Conecta tu IA</h2>
+          <p>Elige la IA que uses. Solo hace falta hacerlo una vez: el enlace no cambia.</p>
+          <div id="aiStatus" class="status busy" role="status" aria-live="polite">Conectando…</div>
+          <div id="aiHint" class="muted"></div>
+          <div class="cards" id="cards"></div>
+        </div>
+      </section>
+
+      <footer>
+        Tus archivos se guardan solo en este ordenador. Tu IA solo puede leerlos mientras Chrome esté abierto.
+        Puedes verlos en <a href="#" id="openFiles">Mis apuntes</a>.
+      </footer>
+    </main>
     <script type="module" src="welcome.js"></script>
   </body>
 </html>

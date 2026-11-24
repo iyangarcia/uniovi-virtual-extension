@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Settings - Claude (fixture)</title></head>
+<body>
+<!-- Imitates claude.ai Settings → Connectors: the page renders late (SPA), an "Add" button opens a
+     menu holding "Add custom connector", which opens a dialog with Name + Remote MCP server URL. -->
+<div id="app"></div>
+<script src="common.js"></script>
+<script>
+later(900, () => {
+  app.innerHTML = `
+    <h1>Connectors</h1>
+    <p>Allow Claude to reference other apps and services.</p>
+    <div class="list"><div class="row">Google Drive <button>Connect</button></div></div>
+    <button id="addBtn" aria-haspopup="menu">Add</button>
+    <div id="menu" role="menu" hidden>
+      <div role="menuitem" tabindex="0" id="customItem">Add custom connector</div>
+      <div role="menuitem" tabindex="0">Browse connectors</div>
+    </div>`;
+  addBtn.onclick = () => (menu.hidden = false);
+  customItem.onclick = () => later(400, () => {
+    menu.hidden = true;
+    const d = document.createElement("div");
+    d.setAttribute("role", "dialog");
+    d.innerHTML = `
+      <h2>Add custom connector <span class="beta">BETA</span></h2>
+      <div><label for="n1">Name</label><input id="n1" data-field="name" type="text"></div>
+      <div><label for="u1">Remote MCP server URL</label><input id="u1" data-field="url" type="text"></div>
+      <details><summary>Advanced settings</summary><input placeholder="OAuth Client ID (optional)"></details>
+      <button>Cancel</button><button data-confirm disabled>Add</button>`;
+    document.body.append(d);
+    bindForm(d);
+  });
+});
+</script>
+</body></html>

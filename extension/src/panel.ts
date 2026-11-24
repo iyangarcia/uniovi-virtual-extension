@@ -1,10 +1,10 @@
 // "Próximamente y novedades" panel injected at the top of the Uniovi Virtual dashboard.
-// Reads the last snapshot straight from chrome.storage.local, so it works without the
-// local bridge or Claude. Rendered in a shadow root (Moodle CSS can't leak in) and built
+// Reads the last snapshot straight from chrome.storage.local, so it works on its own (no AI
+// needed). Rendered in a shadow root (Moodle CSS can't leak in) and built
 // with textContent only: post subjects and names come from the site and are untrusted.
 import { seenAll, TZ, unseen, upcoming, type Seen, type UpcomingItem } from "../../shared/digest.ts";
 import type { Snapshot } from "../../shared/types.ts";
-import type { SyncState } from "./messages.ts";
+import type { Message, SyncState } from "./messages.ts";
 
 const UPCOMING_DAYS = 21;
 const SHOW = 8;
@@ -95,6 +95,9 @@ export function mountPanel(onSync: () => void): void {
 
     const syncBtn = h("button", syncState?.running ? { disabled: "" } : {}, syncState?.running ? "Actualizando…" : "Actualizar");
     syncBtn.addEventListener("click", onSync);
+    // Extension pages can't be linked from a web page: the background opens it.
+    const filesBtn = h("button", { class: "ghost" }, "Mis apuntes");
+    filesBtn.addEventListener("click", () => void chrome.runtime.sendMessage({ type: "open-files" } satisfies Message));
     const metaText = syncState?.running
       ? syncState.text
       : syncState?.error
@@ -102,12 +105,12 @@ export function mountPanel(onSync: () => void): void {
         : snapshot
           ? `Actualizado ${ago(snapshot.syncedAt)}`
           : "";
-    const header = h("header", {}, h("h2", {}, "Próximamente y novedades"), h("span", { class: `meta${syncState?.error ? " err" : ""}` }, metaText), syncBtn);
+    const header = h("header", {}, h("h2", {}, "Próximamente y novedades"), h("span", { class: `meta${syncState?.error ? " err" : ""}` }, metaText), filesBtn, syncBtn);
 
     if (!snapshot) {
       root.replaceChildren(
         h("style", {}, STYLE),
-        h("div", { class: "card" }, header, h("section", {}, h("div", { class: "empty" }, "Aún no hay datos. Pulsa «Actualizar» para leer tus asignaturas (tarda unos 20 segundos)."))),
+        h("div", { class: "card" }, header, h("section", {}, h("div", { class: "empty" }, "Aún no hay datos. Pulsa «Actualizar» para traer tus asignaturas y apuntes (tarda unos 20 segundos). Luego tu IA también podrá verlos."))),
       );
       return;
     }

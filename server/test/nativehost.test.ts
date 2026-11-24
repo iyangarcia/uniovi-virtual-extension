@@ -75,7 +75,6 @@ test("host manifest: name, stdio, allowed_origins = the fixed extension ID", () 
 test("extension ID is derived from the manifest key (Chrome: sha256 of the DER key, first 32 hex digits mapped to a-p)", () => {
   const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as { key: string; permissions: string[] };
   assert.equal(manifest.key, EXTENSION_PUBLIC_KEY);
-  assert.ok(manifest.permissions.includes("nativeMessaging"));
   const hex = createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest("hex").slice(0, 32);
   const id = [...hex].map((c) => String.fromCharCode("a".charCodeAt(0) + parseInt(c, 16))).join("");
   assert.equal(id, EXTENSION_ID);

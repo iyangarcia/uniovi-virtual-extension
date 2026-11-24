@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>ChatGPT plugins (fixture)</title></head>
+<body>
+<!-- Imitates chatgpt.com/plugins (2026): an icon-only "+" button (aria-label) opens a menu with
+     "Add custom MCP server"; the dialog has Name, Description, MCP Server URL, auth and a trust box. -->
+<div id="app"></div>
+<script src="common.js"></script>
+<script>
+later(1200, () => {
+  app.innerHTML = `
+    <nav><a href="#">Chats</a><a href="#">Plugins</a></nav>
+    <h1>Plugins</h1>
+    <input type="search" placeholder="Search plugins">
+    <button id="plus" aria-label="Add">+</button>
+    <div id="menu" role="menu" hidden><div role="menuitem" tabindex="0" id="mcpItem">Add custom MCP server</div></div>`;
+  plus.onclick = () => later(200, () => (menu.hidden = false));
+  mcpItem.onclick = () => {
+    menu.hidden = true;
+    const d = document.createElement("div");
+    d.setAttribute("role", "dialog");
+    d.innerHTML = `
+      <h2>New connector</h2>
+      <label>Name<input name="name" data-field="name"></label>
+      <label>Description <span>(optional)</span><textarea name="description" data-field="description"></textarea></label>
+      <label>MCP Server URL<input name="server_url" data-field="url"></label>
+      <label>Authentication <select><option>OAuth</option><option>No authentication</option></select></label>
+      <label><input type="checkbox"> I understand and want to continue</label>
+      <button data-confirm disabled>Create</button>`;
+    document.body.append(d);
+    bindForm(d);
+  };
+});
+</script>
+</body></html>

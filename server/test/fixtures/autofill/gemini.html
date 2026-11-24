@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Gemini apps (fixture)</title></head>
+<body>
+<!-- Imitates a Gemini "Connected apps" page in Spanish: a direct "Añadir una aplicación personalizada"
+     button, and fields labelled through aria-labelledby (Material style). -->
+<div id="app"></div>
+<script src="common.js"></script>
+<script>
+later(700, () => {
+  app.innerHTML = `
+    <h1>Aplicaciones conectadas</h1>
+    <div role="button" tabindex="0" id="add"><span class="icon">＋</span><span>Añadir una aplicación personalizada</span></div>`;
+  add.onclick = () => later(300, () => {
+    const d = document.createElement("dialog");
+    d.innerHTML = `
+      <form method="dialog">
+        <div><span id="lu">URL del servidor MCP</span><input aria-labelledby="lu" data-field="url"></div>
+        <div><span id="ln">Nombre de la aplicación</span><input aria-labelledby="ln" data-field="name"></div>
+        <button value="cancel">Cancelar</button><button data-confirm disabled value="ok">Añadir</button>
+      </form>`;
+    document.body.append(d);
+    d.show();
+    bindForm(d);
+  });
+});
+</script>
+</body></html>

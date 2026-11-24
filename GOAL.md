@@ -17,10 +17,10 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - [x] Backup: local tag `v0.1.0-instalador` on the last goal-04 commit (pushing it + the .exe release is a user step)
 
 ## 1. Relay (relay/)
-- [ ] Worker + Durable Object per student id implementing shared/relay.ts: hello/secret-hash binding, WebSocket hibernation + ping auto-response, request forwarding with rid, header allow-lists, limits (413/503/504), 404 elsewhere, nothing stored but the secret hash, no body logging
-- [ ] Unit tests for the pure parts (routing, validation, header filtering, limits)
-- [ ] Local end-to-end with `wrangler dev` (no account): a Node agent + MCP SDK client get 10/10 calls through `http://localhost:8787/mcp/<id>/<token>`; wrong secret rejected; no agent → 503 with the Spanish message; wrong path → 404
-- [ ] relay/DESPLIEGUE.md: account, `npx wrangler login`, `npx wrangler deploy`, put the URL in shared/relay.ts, free-plan limits
+- [x] Worker + Durable Object per student id implementing shared/relay.ts: hello/secret-hash binding, WebSocket hibernation + ping auto-response, request forwarding with rid, header allow-lists, limits (413/503/504), 404 elsewhere, nothing stored but the secret hash, no body logging
+- [x] Unit tests for the pure parts (routing, validation, header filtering, limits)
+- [x] Local end-to-end with `wrangler dev` (no account): a Node agent + MCP SDK client get 10/10 calls through `http://localhost:8787/mcp/<id>/<token>`; wrong secret rejected; no agent → 503 with the Spanish message; wrong path → 404
+- [x] relay/DESPLIEGUE.md: account, `npx wrangler login`, `npx wrangler deploy`, put the URL in shared/relay.ts, free-plan limits
 
 ## 2. Shared MCP core
 - [x] Tools, prompts, instructions and text extraction moved to shared/mcp/ over DataStore; no node: imports there
@@ -67,3 +67,11 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
 - `shared/mcp/{common,extract,search,server}.ts` hold the tools, prompts, instructions, extraction and the structured `searchMaterials`, behind `DataStore`. There are no `node:` imports (`grep "node:" shared/mcp` matches only two comments), and the per-store state lives in WeakMaps. `server/src/store.ts` exports `nodeStore`; `server/src/{mcp,extract}.ts` are thin wrappers that keep their old signatures.
 - Re-run in the worktree, then after merging into master: `npm run typecheck` is clean (extension DOM libs + server Node libs both compile shared/mcp); `npm test` 110 pass, 0 fail (105 old tests unchanged, plus 5 in `mcp-core.test.ts` against an in-memory store: kindOf, textOf caching, structured search, cold-budget search, and an InMemoryTransport round trip that lists 11 tools and 3 prompts, with remote mode hiding localPath/dataDir); `npm run build` OK.
 - Agent smoke check: the built stdio server (temp data/app dir, bridge 48911) lists the same 11 tools in the same order, then exits when stdin closes.
+
+### Section 1, relay (agent A, re-checked by coordinator)
+- `relay/`: wrangler 4.159.0, workers-types 5.20261109.1. The Worker plus `AgentRoom` Durable Object (SQLite migration, so it runs on the free plan) uses hibernation with ping/pong auto-response, stores only sha256(secret) under `secretHash`, and compares in constant time. A newer socket replaces an older one (close 1000 "replaced"). Request and response headers go through allow-lists. Limits: 413 / 429 (120 per minute per student) / 503 / 504 / 502. Observability is off and nothing is logged. Pure logic is in `relay/src/logic.ts`.
+- Unit tests: `relay/test/logic.test.ts`, 12 pass. The root `npm test` now includes them, and `typecheck` adds `tsc -p relay`.
+- Coordinator re-run of the end-to-end against local `wrangler dev --port 8787 --var TEST_REQUEST_TIMEOUT_MS:3000`, using `node relay/test/e2e.mjs` (a Node agent running a stateless MCP server, and an MCP SDK client): **26 PASS, "All checks passed"**. The checks included: MCP SDK client tool calls 10/10, a 4 MiB response, wrong token → 404, wrong secret → rejected (close 1008), no agent → 503 with the Spanish JSON-RPC body, agent closing mid-request → immediate 503, a never-answering agent → 504, a 9 MB body → 413 (with and without content-length), the 121st request in a minute → 429, /foo and a bad id → 404. wrangler/workerd were stopped afterwards.
+- After the merge into master (with `npm ci` inside relay/): typecheck clean, `npm test` 122 pass / 0 fail, build OK.
+- `relay/DESPLIEGUE.md` (Spanish) covers: the account, `wrangler login`/`deploy`, setting `RELAY_URL`, a curl check, free-plan limits (100k/day, error 1027, no charges) and rollback.
+- Not verifiable without an account: a real deploy, and production limits on WebSocket message size. A near-8 MB response is about 10.7 MB once base64-encoded, which is untested.

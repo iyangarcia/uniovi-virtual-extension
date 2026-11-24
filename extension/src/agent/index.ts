@@ -54,11 +54,19 @@ let connKey = "";
 let token = "";
 let statsChain: Promise<unknown> = Promise.resolve();
 
-async function writeState(state: AgentStateName, error?: string) {
-  const { [AGENT_KEYS.state]: prev } = (await chrome.storage.local.get(AGENT_KEYS.state)) as { agentState?: AgentState };
-  if (prev?.state === state && prev.error === error) return;
-  const next: AgentState = { state, since: Date.now(), ...(error ? { error } : {}) };
-  await chrome.storage.local.set({ [AGENT_KEYS.state]: next });
+let stateChain: Promise<unknown> = Promise.resolve();
+
+/** Serialised, so quick transitions (connecting → connected) land in order. */
+function writeState(state: AgentStateName, error?: string): Promise<void> {
+  const run = async () => {
+    const { [AGENT_KEYS.state]: prev } = (await chrome.storage.local.get(AGENT_KEYS.state)) as { agentState?: AgentState };
+    if (prev?.state === state && prev.error === error) return;
+    const next: AgentState = { state, since: Date.now(), ...(error ? { error } : {}) };
+    await chrome.storage.local.set({ [AGENT_KEYS.state]: next });
+  };
+  const p = stateChain.then(run, run);
+  stateChain = p.catch(() => undefined);
+  return p;
 }
 
 function bumpStats(ev: "connect" | "pong" | "close" | "request") {

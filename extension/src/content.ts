@@ -31,7 +31,7 @@ if (readPageConfig()) {
   if (isDashboard()) mountPanel(() => void runSync());
   void chrome.runtime.sendMessage({ type: "page-ready" } satisfies Message);
   // Files that couldn't be downloaded during the last sync (a failure, or the sync was cut short) go now.
-  setTimeout(() => void (running ? undefined : uploadPendingFiles(false)), 3000);
+  setTimeout(() => void (running ? undefined : uploadPendingFiles(false).catch((e) => console.warn("[uniovi] files", e))), 3000);
 }
 
 async function runSync() {

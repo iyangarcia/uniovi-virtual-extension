@@ -1,7 +1,10 @@
 import { isImportant, seenAll } from "../../shared/digest.ts";
-import { BRIDGE_URL, type BridgeStatus, type Snapshot } from "../../shared/types.ts";
+import { isWarming, warmTextCache } from "../../shared/mcp/extract.ts";
+import { BRIDGE_URL, type BridgeStatus, type Resource, type Snapshot } from "../../shared/types.ts";
 import { remoteUrlChange } from "./helperState.ts";
+import { initAgent, startAgent } from "./agent/index.ts";
 import { getSettings, type Message, type Reply, type SyncState } from "./messages.ts";
+import { idbStore } from "./store/idb.ts";
 
 const CAMPUS_TAB_PATTERNS = ["https://*.campusvirtual.uniovi.es/*", "https://campusvirtual.uniovi.es/*"];
 
@@ -26,8 +29,12 @@ async function bridge(path: string, init?: RequestInit): Promise<Response> {
 
 // ---------------------------------------------------------------- snapshot handling
 
-/** Stores the snapshot locally (panel source of truth), notifies about new posts, then tries the bridge. */
+/**
+ * Stores the snapshot locally (chrome.storage for the panel, IndexedDB for the AI), notifies about
+ * new posts, then tries the optional local bridge (Claude Code / Desktop users).
+ */
 async function onSnapshot(snapshot: Snapshot) {
+  await idbStore.saveSnapshot(snapshot);
   const { snapshot: prev, seen } = (await chrome.storage.local.get(["snapshot", "seen"])) as { snapshot?: Snapshot; seen?: unknown };
   await chrome.storage.local.set({
     snapshot,
@@ -132,6 +139,37 @@ chrome.notifications.onClicked.addListener(async (id) => {
   chrome.notifications.clear(id);
 });
 
+// ---------------------------------------------------------------- file ingest
+
+/** Stores one downloaded file in IndexedDB, then (optionally, silently) copies it to the local bridge. */
+async function ingestFile(resource: Resource, filename: string, contentType: string, base64: string) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const snapshot = (await idbStore.snapshot()) ?? ((await chrome.storage.local.get("snapshot")).snapshot as Snapshot | undefined);
+  const course = snapshot?.courses.find((c) => c.id === resource.courseId)?.shortname ?? String(resource.courseId);
+  await idbStore.putFile({ ...resource, filename }, course, contentType, bytes);
+  scheduleWarm();
+  // Claude Code / Desktop users with `npm run serve` running also get the file on disk. Never required.
+  await bridge(`/api/files?key=${encodeURIComponent(resource.key)}`, {
+    method: "PUT",
+    headers: { "Content-Type": contentType, "X-Resource": encodeURIComponent(JSON.stringify({ ...resource, filename })) },
+    body: bytes,
+  }).catch(() => undefined);
+}
+
+let warmTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Extracts text of newly stored files a few seconds after the last upload, one at a time. */
+function scheduleWarm(delayMs = 3000) {
+  clearTimeout(warmTimer);
+  warmTimer = setTimeout(() => void warmAll(), delayMs);
+}
+
+async function warmAll() {
+  // A run already in progress only knows the files it started with: wait for it, then go again.
+  if (isWarming(idbStore)) await warmTextCache(idbStore, []);
+  await warmTextCache(idbStore, Object.values(await idbStore.index()));
+}
+
 // ---------------------------------------------------------------- sync triggering
 
 /**
@@ -166,18 +204,17 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       await onSnapshot(msg.snapshot);
       return null;
 
-    case "upload-file": {
-      const bytes = Uint8Array.from(atob(msg.base64), (c) => c.charCodeAt(0));
-      await bridge(`/api/files?key=${encodeURIComponent(msg.resource.key)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": msg.contentType,
-          "X-Resource": encodeURIComponent(JSON.stringify({ ...msg.resource, filename: msg.filename })),
-        },
-        body: bytes,
-      });
+    case "upload-file":
+      await ingestFile(msg.resource, msg.filename, msg.contentType, msg.base64);
       return null;
-    }
+
+    case "known-files":
+      // Skipped (unreadable) files count as known, so the content script doesn't fetch them again.
+      return { ...(await idbStore.skippedFiles()), ...(await idbStore.knownFiles()) };
+
+    case "skip-file":
+      await idbStore.markSkipped(msg.resource);
+      return null;
 
     case "start-sync":
       await triggerSync();
@@ -225,8 +262,19 @@ async function ensureAlarms() {
   if (!(await chrome.alarms.get("bridge-flush"))) await chrome.alarms.create("bridge-flush", { periodInMinutes: 1 });
 }
 
-chrome.runtime.onInstalled.addListener(() => void ensureAlarms());
-chrome.runtime.onStartup.addListener(() => void ensureAlarms());
+chrome.runtime.onInstalled.addListener(() => {
+  void ensureAlarms();
+  void startAgent();
+});
+chrome.runtime.onStartup.addListener(() => {
+  void ensureAlarms();
+  void startAgent();
+});
+
+// Every time the worker starts (install, browser start, or woken by an event/alarm after Chrome
+// stopped it): reconnect to the relay and finish any text extraction left undone.
+initAgent();
+scheduleWarm(10_000);
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "bridge-flush") {

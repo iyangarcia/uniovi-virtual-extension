@@ -1,8 +1,9 @@
-import type { BridgeStatus, Resource, Snapshot } from "../../shared/types.ts";
+import type { Resource, Snapshot } from "../../shared/types.ts";
 import { collect } from "./collector.ts";
 import { getSettings, send, type Message, type Reply } from "./messages.ts";
 import { MoodleClient, readPageConfig } from "./moodle.ts";
 import { isDashboard, mountPanel } from "./panel.ts";
+import { isReadableFile } from "./readable.ts";
 
 let running = false;
 
@@ -29,8 +30,8 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse: (r: R
 if (readPageConfig()) {
   if (isDashboard()) mountPanel(() => void runSync());
   void chrome.runtime.sendMessage({ type: "page-ready" } satisfies Message);
-  // Files that couldn't be delivered earlier (Claude was closed) go now, if it's open.
-  setTimeout(() => void (running ? undefined : uploadPendingFiles(false)), 3000);
+  // Files that couldn't be downloaded during the last sync (a failure, or the sync was cut short) go now.
+  setTimeout(() => void (running ? undefined : uploadPendingFiles(false).catch((e) => console.warn("[uniovi] files", e))), 3000);
 }
 
 async function runSync() {
@@ -45,13 +46,13 @@ async function runSync() {
       replyWindowDays: settings.replyWindowDays,
       onProgress: (t) => progress(t),
     });
-    // Stored in the extension first: the panel and notifications work even if Claude is closed.
+    // Stored in the extension (chrome.storage for the panel, IndexedDB for the AI).
     await send({ type: "snapshot-collected", snapshot });
     const files = await uploadPendingFiles(true);
     const summary =
       `${snapshot.courses.length} asignaturas, ${snapshot.resources.length} materiales, ${snapshot.posts.length} mensajes` +
-      (files === null ? " · archivos para Claude: pendientes (Claude cerrado)" : files.uploaded ? ` · ${files.uploaded} archivos nuevos` : "") +
-      (files?.failed ? ` (${files.failed} fallidos)` : "");
+      (files.uploaded ? ` · ${files.uploaded} archivos nuevos` : "") +
+      (files.failed ? ` (${files.failed} fallidos)` : "");
     progress(summary, false);
   } catch (err) {
     progress(err instanceof Error ? err.message : String(err), false, true);
@@ -61,29 +62,24 @@ async function runSync() {
 }
 
 /**
- * Copies new/changed files to the bridge. Needs the campus tab (same-origin fetch with the
- * session cookie). Returns null when the bridge is offline; files then wait for a later visit.
+ * Downloads new/changed readable files into the extension's storage (via the background). Needs
+ * the campus tab (same-origin fetch with the session cookie). Archives, binaries and media are not
+ * downloaded: they stay campus links in the snapshot.
  */
-async function uploadPendingFiles(reportProgress: boolean): Promise<{ uploaded: number; failed: number } | null> {
+async function uploadPendingFiles(reportProgress: boolean): Promise<{ uploaded: number; failed: number }> {
   const settings = await getSettings();
   if (!settings.downloadFiles) return { uploaded: 0, failed: 0 };
-  let status: BridgeStatus;
-  try {
-    status = await send<BridgeStatus>({ type: "bridge-status" });
-  } catch {
-    return null;
-  }
+  const known = await send<Record<string, number>>({ type: "known-files" });
   const { snapshot } = (await chrome.storage.local.get("snapshot")) as { snapshot?: Snapshot };
   if (!snapshot) return { uploaded: 0, failed: 0 };
   const maxBytes = settings.maxFileMB * 1024 * 1024;
-  const todo = snapshot.resources.filter((r) => needsDownload(r, status.knownFiles, maxBytes));
+  const todo = snapshot.resources.filter((r) => needsDownload(r, known, maxBytes));
   let uploaded = 0;
   let failed = 0;
   for (const [i, r] of todo.entries()) {
-    if (reportProgress) progress(`Copiando archivos para Claude ${i + 1}/${todo.length}: ${r.filename ?? r.name}`);
+    if (reportProgress) progress(`Guardando archivos ${i + 1}/${todo.length}: ${r.filename ?? r.name}`);
     try {
-      await uploadFile(r, maxBytes);
-      uploaded++;
+      if (await uploadFile(r, maxBytes)) uploaded++;
     } catch (err) {
       failed++;
       console.warn("[uniovi] file", r.url, err);
@@ -95,21 +91,30 @@ async function uploadPendingFiles(reportProgress: boolean): Promise<{ uploaded: 
 function needsDownload(r: Resource, known: Record<string, number>, maxBytes: number): boolean {
   if (r.modname !== "resource" && r.modname !== "folder" && r.modname !== "section-file") return false;
   if (r.filesize !== undefined && r.filesize > maxBytes) return false;
+  if (isReadableFile(r) === false) return false;
   const stored = known[r.key];
   if (stored === undefined) return true;
   return r.timemodified !== undefined && r.timemodified > stored;
 }
 
-async function uploadFile(r: Resource, maxBytes: number) {
+/** Returns false when the file turned out not to be a readable type (recorded, not downloaded). */
+async function uploadFile(r: Resource, maxBytes: number): Promise<boolean> {
   const res = await fetch(r.url, { credentials: "same-origin" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const contentType = res.headers.get("content-type") ?? "application/octet-stream";
   // A resource set to "embed"/"open" without redirect, or a login page, comes back as HTML.
   if (contentType.startsWith("text/html")) throw new Error("Got an HTML page instead of a file");
+  const filename = r.filename ?? filenameFrom(res) ?? `${r.name}`;
+  // `/mod/resource/view.php` links only reveal the file name and type after the redirect.
+  if (isReadableFile({ filename, mimetype: contentType.split(";")[0] }) !== true) {
+    await res.body?.cancel().catch(() => undefined);
+    await send({ type: "skip-file", resource: { ...r, filename } });
+    return false;
+  }
   const buf = await res.arrayBuffer();
   if (buf.byteLength > maxBytes) throw new Error("File too large");
-  const filename = r.filename ?? filenameFrom(res) ?? `${r.name}`;
   await send({ type: "upload-file", resource: r, filename, contentType, base64: toBase64(buf) });
+  return true;
 }
 
 function filenameFrom(res: Response): string | undefined {

@@ -1,10 +1,11 @@
 import { isImportant, seenAll } from "../../shared/digest.ts";
 import { isWarming, warmTextCache } from "../../shared/mcp/extract.ts";
+import { LATEST_RELEASE_API } from "../../shared/release.ts";
 import { BRIDGE_URL, type BridgeStatus, type Resource, type Snapshot } from "../../shared/types.ts";
-import { remoteUrlChange } from "./helperState.ts";
 import { initAgent, startAgent } from "./agent/index.ts";
 import { getSettings, type Message, type Reply, type SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
+import { shouldCheck, UPDATE_KEYS, updateFromRelease } from "./ui/update.ts";
 
 const CAMPUS_TAB_PATTERNS = ["https://*.campusvirtual.uniovi.es/*", "https://campusvirtual.uniovi.es/*"];
 
@@ -91,46 +92,44 @@ async function notifyNewPosts(prev: Snapshot, next: Snapshot) {
   }
 }
 
-// ---------------------------------------------------------------- connector URL changes
-
-/**
- * The tunnel URL changes when the helper restarts; the student must paste the new one into their AI.
- * Notifies once per change (fixed notification id, so concurrent checks replace rather than stack).
- * `knownRemoteUrl` is set the first time a URL is seen (popup open or alarm), never notified itself.
- */
-async function checkRemoteUrl(status: BridgeStatus) {
-  const { knownRemoteUrl } = (await chrome.storage.local.get("knownRemoteUrl")) as { knownRemoteUrl?: string };
-  const change = remoteUrlChange(knownRemoteUrl, status.remoteUrl);
-  if (change.known !== knownRemoteUrl) await chrome.storage.local.set({ knownRemoteUrl: change.known });
-  if (!change.notify) return;
-  chrome.notifications.create("remote-url", {
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Ha cambiado la URL del conector",
-    message: "Pega la nueva URL en tu IA (ChatGPT, Gemini o Claude). Cópiala desde el botón de la extensión.",
-    priority: 2,
-    requireInteraction: true,
-  });
-}
+// ---------------------------------------------------------------- optional local bridge (Claude Code / Desktop)
 
 async function bridgeStatus(): Promise<BridgeStatus> {
-  const status = (await (await bridge("/api/status")).json()) as BridgeStatus;
-  await checkRemoteUrl(status).catch((e) => console.warn("[uniovi] remote url check", e));
-  return status;
+  return (await (await bridge("/api/status")).json()) as BridgeStatus;
 }
 
-/** Alarm probe, only once the student has had a connector URL: without the helper nothing new runs. */
-async function pollRemoteUrl() {
-  const { knownRemoteUrl } = await chrome.storage.local.get("knownRemoteUrl");
-  if (knownRemoteUrl) await bridgeStatus().catch(() => undefined);
+// ---------------------------------------------------------------- update notice
+
+const UPDATE_ALARM = "update-check";
+
+/**
+ * The unpacked extension can't auto-update: at most once a day, ask GitHub for the latest release
+ * and store `update` when it is newer than this version (removed when it isn't). Failures are silent.
+ * `force` (dev/test, via devLatestReleaseApi) skips the daily throttle.
+ */
+async function checkForUpdate(force = false) {
+  const got = await chrome.storage.local.get([UPDATE_KEYS.checkedAt, UPDATE_KEYS.devApi]);
+  const now = Date.now();
+  if (!force && !shouldCheck(got[UPDATE_KEYS.checkedAt], now)) return;
+  await chrome.storage.local.set({ [UPDATE_KEYS.checkedAt]: now });
+  const dev = got[UPDATE_KEYS.devApi];
+  const api = typeof dev === "string" && /^https?:\/\//.test(dev) ? dev : LATEST_RELEASE_API;
+  try {
+    const res = await fetch(api, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+    if (!res.ok) return;
+    const update = updateFromRelease(await res.json(), chrome.runtime.getManifest().version);
+    if (update) await chrome.storage.local.set({ [UPDATE_KEYS.update]: update });
+    else await chrome.storage.local.remove(UPDATE_KEYS.update);
+  } catch {
+    // Offline or GitHub unreachable: try again tomorrow.
+  }
 }
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && UPDATE_KEYS.devApi in changes && changes[UPDATE_KEYS.devApi]!.newValue) void checkForUpdate(true);
+});
 
 chrome.notifications.onClicked.addListener(async (id) => {
-  if (id === "remote-url") {
-    chrome.notifications.clear(id);
-    await chrome.action.openPopup().catch(() => undefined); // needs a focused window; otherwise the toolbar button opens it
-    return;
-  }
   const { snapshot } = (await chrome.storage.local.get("snapshot")) as { snapshot?: Snapshot };
   if (!snapshot) return;
   const postId = /^post:(\d+)$/.exec(id)?.[1];
@@ -240,6 +239,10 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       return null;
     }
 
+    case "open-files":
+      await chrome.tabs.create({ url: chrome.runtime.getURL("files.html") });
+      return null;
+
     case "run-sync":
       return null; // handled by content script
   }
@@ -260,11 +263,15 @@ async function ensureAlarms() {
   if (!(await chrome.alarms.get("periodic-sync"))) await chrome.alarms.create("periodic-sync", { periodInMinutes: 60 });
   // Cheap localhost probe: delivers a stored snapshot as soon as Claude (and so the bridge) starts.
   if (!(await chrome.alarms.get("bridge-flush"))) await chrome.alarms.create("bridge-flush", { periodInMinutes: 1 });
+  if (!(await chrome.alarms.get(UPDATE_ALARM))) await chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 360 });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(({ reason }) => {
   void ensureAlarms();
   void startAgent();
+  // Left over from the goal-04 helper (its tunnel URL changed per run; the relay link doesn't).
+  void chrome.storage.local.remove("knownRemoteUrl");
+  if (reason === "install") void chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 });
 chrome.runtime.onStartup.addListener(() => {
   void ensureAlarms();
@@ -277,10 +284,8 @@ initAgent();
 scheduleWarm(10_000);
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "bridge-flush") {
-    await flushBridge();
-    return pollRemoteUrl();
-  }
+  if (alarm.name === "bridge-flush") return flushBridge();
+  if (alarm.name === UPDATE_ALARM) return checkForUpdate();
   if (alarm.name !== "periodic-sync") return;
   const settings = await getSettings();
   const { syncState } = await chrome.storage.local.get("syncState");

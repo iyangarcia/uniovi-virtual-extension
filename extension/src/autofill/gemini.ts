@@ -22,7 +22,7 @@ export const gemini: AutofillSpec = {
   ],
   urlField: ["mcp server url", "url", "server", "servidor"],
   nameField: ["name", "nombre"],
-  advance: ["=next", "=siguiente", "=continue", "=continuar"],
+  advance: ["=next", "=siguiente"], // never "Continue": that is claude.ai's confirm button
   nameLaterMs: 180_000,
   confirmLabel: "Connect",
 };

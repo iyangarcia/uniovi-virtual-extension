@@ -16,12 +16,13 @@
 //          [--click <selector>] [--hide <selector>] [--clip <selector> | --clip-highlight] [--pad <px>]
 // --hide: display:none on those elements (e.g. a sidebar); --clip: crop to that element's box (+pad, default 24).
 import puppeteer from "puppeteer";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { args, auditIdentity, clearHighlights, highlight, identityFromEnv, log, MASKED_LINK, sleep } from "./lib.mjs";
 
 const ORIGINS = { claude: "https://claude.ai", chatgpt: "https://chatgpt.com", gemini: "https://gemini.google.com" };
-const CONFIRM = /^(add|anadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir|allow always|permitir siempre)$/;
+// Any of these words anywhere in a label (after removing icon glyphs) makes it a possible confirm.
+const CONFIRM = /(add|anadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|continue|continuar|next|siguiente|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir|install|instalar)/;
 const NEUTRAL_TITLES = ["Resumen tema 2", "Dudas examen", "Esquema Derecho Romano", "Plan de estudio semanal", "Preguntas de repaso", "Comentario de sentencia", "Apuntes tema 1", "Fechas de entrega"];
 const FAKE_NAME = "Estudiante Uniovi";
 const FAKE_EMAIL = "estudiante@example.com";
@@ -57,10 +58,19 @@ try {
   // After the viewport change, so a menu opened here stays open for the shot.
   if (typeof opts.click === "string") {
     const el = await page.waitForSelector(opts.click, { timeout: 10000 });
-    const text = await el.evaluate((e) => (e.innerText || e.getAttribute("aria-label") || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase());
-    // A menu trigger ("Add ▾", aria-haspopup) only opens a menu, so its label may be a confirm word.
-    const menuTrigger = await el.evaluate((e) => /^(menu|true)$/.test(e.getAttribute("aria-haspopup") ?? ""));
-    if (CONFIRM.test(text) && !menuTrigger) throw new Error(`refusing to click a confirm button ("${text}"): the person presses it`);
+    const info = await el.evaluate((e) => {
+      const r = e.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return {
+        text: (e.innerText || e.getAttribute("aria-label") || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(),
+        // A menu trigger ("Add ▾", aria-haspopup) only opens a menu, so its label may be a confirm word.
+        menuTrigger: /^(menu|true)$/.test(e.getAttribute("aria-haspopup") ?? ""),
+        submitLike: e.getAttribute("type") === "submit" || !!e.closest("form") || !!e.closest("[role='dialog'], [role='alertdialog'], dialog")?.querySelector("input:not([type='hidden']), textarea, select"),
+        onTop: !!top && (top === e || e.contains(top)),
+      };
+    });
+    if (!info.menuTrigger && (CONFIRM.test(info.text) || info.submitLike)) throw new Error(`refusing to click "${info.text}": it may confirm something, the person presses it`);
+    if (!info.onTop) throw new Error(`refusing to click "${info.text}": something else is on top of it`);
     await el.click();
     await sleep(800);
   }
@@ -168,7 +178,15 @@ try {
     const x = Math.max(0, box.x - pad), y = Math.max(0, box.y - pad);
     clip = { x, y, width: Math.min(vw.w - x, box.width + 2 * pad), height: Math.min(vw.h - y, box.height + 2 * pad) };
   }
+  // Again right before and after the shot: a re-render can put the real values back (React keeps them).
+  await auditIdentity(page, ident);
   await page.screenshot({ path: file, ...(clip ? { clip } : {}) });
+  try {
+    await auditIdentity(page, ident);
+  } catch (e) {
+    rmSync(file, { force: true });
+    throw e;
+  }
   log("saved", file);
 } catch (e) {
   failed = true;

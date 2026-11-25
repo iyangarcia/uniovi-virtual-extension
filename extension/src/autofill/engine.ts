@@ -26,6 +26,7 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
     advanced: `he pegado el enlace y pulsado «Next». Marca tú el aviso y pulsa ${confirmWord}. ${later}`,
     noAdvance: `he pegado el enlace. Pulsa tú «Next», marca el aviso y pulsa ${confirmWord}. ${later}`,
     named: `he escrito el nombre «${args.name}». Revísalo y pulsa tú ${confirmWord} para terminar.`,
+    nameReady: `el nombre ya está escrito. Revísalo y pulsa tú ${confirmWord} para terminar.`,
     fail: "No pude rellenarlo solo: el enlace está copiado, pégalo en el campo URL (Ctrl+V).",
   };
   type NoteKind = keyof typeof NOTES;
@@ -252,20 +253,26 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       watching = true;
       const first = urlInput;
       const origin = location.origin;
+      const path = location.pathname;
       const stopAt = Date.now() + spec.nameLaterMs;
       const watcher = setInterval(() => {
         try {
-          if (location.origin !== origin) return void clearInterval(watcher);
+          // A route change in the page (same origin, no reload): another screen, stop.
+          if (location.origin !== origin || location.pathname !== path) {
+            clearInterval(watcher);
+            return void document.getElementById(BANNER_ID)?.remove();
+          }
           if (Date.now() > stopAt) {
             clearInterval(watcher);
-            return showNote(noteKind);
+            return void document.getElementById(BANNER_ID)?.remove();
           }
           const field = inputs().find(
-            (el) => el !== first && !(el instanceof HTMLInputElement && el.type === "url") && el.value !== url && matches(describe(el), spec.nameField),
+            // Only a name field inside a dialog (the wizard's next screen), never a field of the page itself.
+            (el) => el !== first && !!el.closest("[role='dialog'], [role='alertdialog'], dialog") && !(el instanceof HTMLInputElement && el.type === "url") && el.value !== url && matches(describe(el), spec.nameField),
           );
           if (!field) return;
           clearInterval(watcher);
-          if (field.value.trim()) return showNote(noteKind);
+          if (field.value.trim()) return showNote("nameReady"); // never overwrite: the AI or she filled it
           if (setValue(field, name)) showNote("named");
           else showNote(noteKind);
         } catch {

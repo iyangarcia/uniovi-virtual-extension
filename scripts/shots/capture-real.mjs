@@ -62,7 +62,10 @@ try {
       // Also each part of the name (first name alone, surname alone), longest first.
       for (const n of names) for (const part of n.split(/\s+/)) if (part.length > 2) pairs.push([part, fakeName.split(" ")[0]]);
       pairs.sort((a, b) => b[0].length - a[0].length);
-      const swap = (s) => pairs.reduce((acc, [from, to]) => acc.replace(new RegExp(esc(from), "gi"), to), s);
+      // Connector links shown as text (e.g. read-only after the AI checked the server) are masked too,
+      // before the names, since the relay host can contain the maintainer's handle.
+      const LINK = /[^\s"'<>]*\/mcp\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?/g;
+      const swap = (s) => pairs.reduce((acc, [from, to]) => acc.replace(new RegExp(esc(from), "gi"), to), s.replace(LINK, masked));
       const roots = [document];
       for (let i = 0; i < roots.length; i++) for (const el of roots[i].querySelectorAll("*")) if (el.shadowRoot) roots.push(el.shadowRoot);
       for (const root of roots) {

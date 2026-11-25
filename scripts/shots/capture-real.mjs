@@ -44,21 +44,24 @@ try {
   if (!page) throw new Error(`no open tab on ${ORIGINS[site]}`);
   await page.bringToFront();
 
-  if (typeof opts.click === "string") {
-    const el = await page.waitForSelector(opts.click, { timeout: 10000 });
-    const text = await el.evaluate((e) => (e.innerText || e.getAttribute("aria-label") || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase());
-    if (CONFIRM.test(text)) throw new Error(`refusing to click a confirm button ("${text}"): the person presses it`);
-    await el.click();
-    await sleep(800);
-  }
-
   if (typeof opts.hide === "string") await page.$$eval(opts.hide, (els) => els.forEach((e) => e.style.setProperty("display", "none", "important")));
 
   const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  // Already at 2x (set before opening a menu): no resize, which would close popovers.
+  // Already at 2x: no resize (a resize closes open popovers).
   if (Math.abs((await page.evaluate(() => devicePixelRatio)) - 2) > 0.01) {
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
     await sleep(300);
+  }
+
+  // After the viewport change, so a menu opened here stays open for the shot.
+  if (typeof opts.click === "string") {
+    const el = await page.waitForSelector(opts.click, { timeout: 10000 });
+    const text = await el.evaluate((e) => (e.innerText || e.getAttribute("aria-label") || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase());
+    // A menu trigger ("Add ▾", aria-haspopup) only opens a menu, so its label may be a confirm word.
+    const menuTrigger = await el.evaluate((e) => /^(menu|true)$/.test(e.getAttribute("aria-haspopup") ?? ""));
+    if (CONFIRM.test(text) && !menuTrigger) throw new Error(`refusing to click a confirm button ("${text}"): the person presses it`);
+    await el.click();
+    await sleep(800);
   }
 
   await page.evaluate(

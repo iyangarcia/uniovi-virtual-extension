@@ -143,7 +143,7 @@ try {
       for (const h of handles) {
         const t = clean(await h.evaluate((e) => e.innerText || e.getAttribute("aria-label") || ""));
         const box = await h.boundingBox();
-        if (box && t === wanted) {
+        if (box && (t === wanted || t.startsWith(wanted + " "))) {
           target = h;
           break;
         }

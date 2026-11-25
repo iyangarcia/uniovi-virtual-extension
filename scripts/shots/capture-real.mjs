@@ -56,7 +56,7 @@ try {
 
   const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   // Already at 2x (set before opening a menu): no resize, which would close popovers.
-  if ((await page.evaluate(() => devicePixelRatio)) !== 2) {
+  if (Math.abs((await page.evaluate(() => devicePixelRatio)) - 2) > 0.01) {
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
     await sleep(300);
   }

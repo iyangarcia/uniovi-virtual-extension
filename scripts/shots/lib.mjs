@@ -240,8 +240,9 @@ export async function auditIdentity(page, { names = [], emails = [], secrets = [
 export function identityFromEnv(extraSecrets = []) {
   const list = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return {
-    names: list(process.env.UV_REAL_NAME),
-    emails: list(process.env.UV_REAL_EMAIL),
+    // Each part of a name (first name alone, surname alone) and the email's local part count too.
+    names: [...new Set(list(process.env.UV_REAL_NAME).flatMap((n) => [n, ...n.split(/\s+/).filter((p) => p.length > 2)]))],
+    emails: [...new Set(list(process.env.UV_REAL_EMAIL).flatMap((e) => [e, e.split("@")[0]].filter((p) => p.length > 2)))],
     secrets: [...list(process.env.UV_SECRETS), ...extraSecrets.filter(Boolean)],
   };
 }

@@ -100,7 +100,7 @@ test("update from a GitHub release body", () => {
 });
 
 // Buttons the auto-fill must never press, whether as a step or as a wizard's advance button.
-const CONFIRM = /^=?(add|anadir|añadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir)$/;
+const CONFIRM = /^=?(add|anadir|añadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir|continue|continuar)$/;
 
 test("auto-fill specs: https origins declared as optional host permissions, start page on that origin", () => {
   const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as {

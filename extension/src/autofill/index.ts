@@ -12,6 +12,8 @@ import { CONNECTOR_NAME, type AiId, type AutofillSpec, type FillResult } from ".
 
 export const AI_SPECS: Record<AiId, AutofillSpec> = { claude, chatgpt, gemini };
 export const DEV_AUTOFILL_KEY = "devAutofillUrls";
+/** The icon uploaded into forms that take one (ChatGPT): 256 px PNG under 10 KB (ux.test.ts checks). */
+export const CONNECTOR_ICON = "icons/connector.png";
 
 export type AutoConnectOutcome = { ok: true; result: FillResult } | { ok: false; reason: "permission" | "tab" | "fill"; result?: FillResult; error?: string };
 
@@ -49,6 +51,19 @@ export async function autoConnect(spec: AutofillSpec, connectorUrl: string, perm
   }
 }
 
+/** icons/connector.png (256 px, under ChatGPT's 10 KB limit) as base64; undefined if it can't be read. */
+async function connectorIcon(): Promise<string | undefined> {
+  try {
+    const bytes = new Uint8Array(await (await fetch(chrome.runtime.getURL(CONNECTOR_ICON))).arrayBuffer());
+    if (!bytes.length || bytes.length > 10_000) return undefined;
+    let s = "";
+    for (const b of bytes) s += String.fromCharCode(b);
+    return btoa(s);
+  } catch {
+    return undefined; // the icon is a nicety
+  }
+}
+
 async function openAndFill(spec: AutofillSpec, connectorUrl: string, startUrl: string): Promise<AutoConnectOutcome> {
   let tabId: number | undefined;
   try {
@@ -60,10 +75,11 @@ async function openAndFill(spec: AutofillSpec, connectorUrl: string, startUrl: s
     return { ok: false, reason: "tab", error: err instanceof Error ? err.message : String(err) };
   }
   try {
+    const iconPng = spec.icon ? await connectorIcon() : undefined;
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId },
       func: fillConnector,
-      args: [{ spec, name: CONNECTOR_NAME, url: connectorUrl, timeoutMs: 25_000 }],
+      args: [{ spec, name: CONNECTOR_NAME, url: connectorUrl, timeoutMs: 25_000, ...(iconPng ? { iconPng } : {}) }],
     });
     const result = injection?.result as FillResult | undefined;
     return result?.ok ? { ok: true, result } : { ok: false, reason: "fill", ...(result ? { result } : {}) };

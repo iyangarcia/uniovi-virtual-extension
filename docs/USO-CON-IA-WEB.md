@@ -116,6 +116,7 @@ En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro,
 ![Menú Añadir de ChatGPT con Añadir servidor MCP personalizado](img/chatgpt-1-menu.png)
 
 3. Nombre: `Uniovi Virtual`. En **URL del servidor**: pega el enlace.
+   En **Autenticación** elige **Sin autenticación** (si dejas «OAuth», no conecta).
 4. Marca **Lo entiendo y quiero continuar** y pulsa **Crear como complemento**.
 
 ![Formulario de ChatGPT con el nombre, el enlace tapado y la casilla Lo entiendo y quiero continuar](img/chatgpt-2-formulario.png)

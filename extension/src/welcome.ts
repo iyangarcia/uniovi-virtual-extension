@@ -42,10 +42,11 @@ const CARDS: Record<AiId, CardText> = {
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
       "En chatgpt.com/plugins pulsa «Añadir» → «Añadir servidor MCP personalizado» (en inglés: «Add» → «Add custom MCP server»).",
-      "Nombre: Uniovi Virtual. URL: pega el enlace (Ctrl+V).",
-      "Marca que confías en la aplicación y pulsa el botón para crearla.",
+      "Nombre: Uniovi Virtual. URL del servidor: pega el enlace (Ctrl+V).",
+      "En «Autenticación» elige «Sin autenticación» (si no, no conecta).",
+      "Marca «Lo entiendo y quiero continuar» y pulsa «Crear como complemento».",
     ],
-    ok: "✓ Listo: en la pestaña de ChatGPT revisa los datos y pulsa tú el botón para crearlo.",
+    ok: "✓ Listo: en la pestaña de ChatGPT revisa los datos (Autenticación: «Sin autenticación»), marca el aviso y pulsa tú «Crear como complemento».",
   },
   gemini: {
     plan: "Avanzado: en España funciona desde el «Modo desarrollador» de Gemini, con más pasos y en inglés.",

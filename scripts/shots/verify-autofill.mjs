@@ -76,6 +76,19 @@ try {
     await tab.close();
   }
 
+  // ChatGPT, English (native select) and Spanish (Radix-like combobox with a portal list, as seen live):
+  // «Autenticación» set to «Sin autenticación» (never «OAuth o sin autenticación»), the icon uploaded,
+  // the trust box and «Crear como complemento» left to the student, the «Túnel» toggle untouched.
+  for (const [fixture, none] of [["chatgpt.html", "No authentication"], ["chatgpt-es.html", "Sin autenticación"]]) {
+    const { tab, outcome, page } = await runFill("chatgpt", fixture);
+    check(outcome === "ok" && page.state.url === link && page.state.name === "Uniovi Virtual", `${fixture}: name + URL filled`);
+    check(page.state.auth?.trim() === none, `${fixture}: authentication set to "${none}" (got "${page.state.auth}")`);
+    check(/^image\/png \d+$/.test(page.state.icon ?? "") && Number(page.state.icon.split(" ")[1]) <= 10_000, `${fixture}: icon uploaded (${page.state.icon})`);
+    check(page.confirmClicks === 0 && page.untrustedChecks === 0 && !page.decoyClicks, `${fixture}: confirm ${page.confirmClicks}, checkbox changes ${page.untrustedChecks}, decoys ${page.decoyClicks ?? 0}`);
+    check(!/Autenticación/.test(page.note), `${fixture}: no "choose Sin autenticación" hint needed ("${page.note}")`);
+    await tab.close();
+  }
+
   // A page without the form: gives up, fills nothing, says so on the card and on the page.
   {
     const { tab, outcome, card, page } = await runFill("claude", "broken.html");

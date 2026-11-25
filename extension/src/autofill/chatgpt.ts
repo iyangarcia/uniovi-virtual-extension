@@ -1,9 +1,10 @@
 import type { AutofillSpec } from "./types.ts";
 
-// ChatGPT (2026, Plus or higher): chatgpt.com/plugins → "+" → "Add custom MCP server" → form with
-// Name, Description, MCP server URL and authentication; the student ticks the trust box and presses
-// the final button herself. Older menus: Settings → Connectors → Advanced → Developer mode → Create.
-// Verified only against server/test/fixtures/autofill/chatgpt.html; the real site is a manual check.
+// ChatGPT (2026, free plan too): chatgpt.com/plugins → «Añadir» / "Add" → «Añadir servidor MCP
+// personalizado» / "Add custom MCP server" → form with Icono, Nombre, Descripción, «URL del servidor»
+// and «Autenticación»; the student ticks the trust box and presses «Crear» herself. Older menus:
+// Settings → Connectors → Advanced → Developer mode → Create. Labels checked live in Spanish and
+// English on 2026-11-25 (fixtures chatgpt.html, chatgpt-es.html); re-check the real site before releases.
 export const chatgpt: AutofillSpec = {
   id: "chatgpt",
   label: "ChatGPT",
@@ -28,4 +29,13 @@ export const chatgpt: AutofillSpec = {
   ],
   urlField: ["url", "mcp server", "servidor mcp"],
   nameField: ["name", "nombre"],
+  // «Autenticación» defaults to «OAuth» (seen live, 2026-11-25); the link has no login, so ChatGPT
+  // can't connect unless it is «Sin autenticación». «OAuth o sin autenticación» is not picked.
+  choice: {
+    field: ["autenticacion", "authentication"],
+    option: ["=sin autenticacion", "=no authentication", "=none", "=ninguna"],
+    hint: "En «Autenticación» elige «Sin autenticación».",
+  },
+  // «Icono (opcional)»: PNG, max 10 KB.
+  icon: true,
 };

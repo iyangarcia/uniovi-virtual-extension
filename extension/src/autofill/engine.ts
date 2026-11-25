@@ -30,6 +30,8 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
     fail: "No pude rellenarlo solo: el enlace está copiado, pégalo en el campo URL (Ctrl+V).",
   };
   type NoteKind = keyof typeof NOTES;
+  /** One more sentence for the note (spec.choice.hint when the dropdown could not be set). */
+  let noteExtra = "";
   let removeTimer: ReturnType<typeof setTimeout> | undefined;
   /** The small note on the page, so she knows what to do next. `sticky`: no 30 s auto-removal. */
   const showNote = (kind: NoteKind, sticky = false) => {
@@ -48,7 +50,7 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       const title = document.createElement("strong");
       title.textContent = "Uniovi Virtual: ";
       const text = document.createElement("span");
-      text.textContent = NOTES[kind];
+      text.textContent = kind === "fail" || !noteExtra ? NOTES[kind] : `${NOTES[kind]} ${noteExtra}`;
       const close = document.createElement("button");
       close.type = "button";
       close.textContent = "×";
@@ -212,6 +214,103 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       if (again && again.value !== url) result.url = setValue(again, url);
       trace.push(`filled url=${result.url} name=${result.name}`);
     } else trace.push("url field not found");
+
+    // ---- 2b. the icon (ChatGPT «Icono»: PNG ≤ 10 KB) into the form's own file input. Never a file
+    // input outside the URL field's dialog or form, and never one that already has a file.
+    const formRoot = () => (findUrlInput() ?? urlInput)?.closest("[role='dialog'], [role='alertdialog'], dialog, form") ?? null;
+    if (urlInput && result.url && spec.icon && args.iconPng) {
+      result.icon = false;
+      const file = [...(formRoot()?.querySelectorAll<HTMLInputElement>("input[type='file']") ?? [])].find(
+        (el) => !el.disabled && (!el.accept || /png|image/i.test(el.accept)),
+      );
+      if (file && !file.files?.length) {
+        try {
+          const bytes = Uint8Array.from(atob(args.iconPng), (c) => c.charCodeAt(0));
+          const dt = new DataTransfer();
+          dt.items.add(new File([bytes], "uniovi-virtual.png", { type: "image/png" }));
+          file.files = dt.files;
+          file.dispatchEvent(new Event("input", { bubbles: true }));
+          file.dispatchEvent(new Event("change", { bubbles: true }));
+          result.icon = file.files?.length === 1;
+          await sleep(200);
+        } catch (err) {
+          trace.push(`icon: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      trace.push(`icon=${result.icon}`);
+    }
+
+    // ---- 2c. a dropdown to set (ChatGPT «Autenticación» → «Sin autenticación»), only inside the URL
+    // field's dialog or form. Only exact option texts are clicked («OAuth o sin autenticación» never is).
+    if (urlInput && result.url && spec.choice) {
+      const c = spec.choice;
+      const labelOf = (el: HTMLElement) => {
+        const parts: unknown[] = [el.getAttribute("aria-label")];
+        for (const id of (el.getAttribute("aria-labelledby") ?? "").split(/\s+/).filter(Boolean)) parts.push(document.getElementById(id)?.textContent);
+        if (el.id) for (const l of document.querySelectorAll(`label[for="${CSS.escape(el.id)}"]`)) parts.push(l.textContent);
+        parts.push(el.closest("label")?.textContent);
+        let node: Element | null = el;
+        for (let i = 0; i < 3 && node; i++, node = node.parentElement) {
+          const prev = node.previousElementSibling;
+          if (prev && !prev.querySelector(FIELD)) {
+            parts.push(prev.textContent);
+            break;
+          }
+        }
+        return norm(parts.filter(Boolean).join(" | "));
+      };
+      const shown = (el: HTMLElement) => (el instanceof HTMLSelectElement ? norm(el.selectedOptions[0]?.textContent) : norm(el.innerText || el.textContent));
+      const findCombo = () =>
+        [...(formRoot()?.querySelectorAll<HTMLElement>("select, [role='combobox'], button[aria-haspopup='listbox']") ?? [])].find(
+          (el) => visible(el) && matches(labelOf(el), c.field),
+        );
+      const combo = findCombo();
+      if (!combo) trace.push("choice: dropdown not found");
+      else if (matches(shown(combo), c.option)) result.choice = true;
+      else if (combo instanceof HTMLSelectElement) {
+        const option = c.option.map((p) => [...combo.options].find((o) => matches(norm(o.textContent), [p]))).find(Boolean);
+        if (option) {
+          combo.focus();
+          Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(combo, option.value);
+          combo.dispatchEvent(new Event("input", { bubbles: true }));
+          combo.dispatchEvent(new Event("change", { bubbles: true }));
+          combo.blur();
+          result.choice = combo.value === option.value;
+        }
+      } else {
+        press(combo);
+        // The list may render in a portal outside the dialog: any visible option-like element whose
+        // whole text is one of the wanted options.
+        const OPTION = "[role='option'], [role='menuitemradio'], [role='menuitem'], [role='listbox'] *, [data-radix-popper-content-wrapper] *";
+        const findOption = () => {
+          for (const p of c.option) {
+            const hit = [...document.querySelectorAll<HTMLElement>(OPTION)].find((o) => visible(o) && matches(norm(o.innerText || o.textContent), [p]));
+            if (hit) return hit;
+          }
+          return undefined;
+        };
+        let option: HTMLElement | undefined;
+        for (const stop = Date.now() + 2000; !option && Date.now() < stop; ) {
+          await sleep(150);
+          option = findOption();
+        }
+        if (option) {
+          press(option);
+          await sleep(300);
+          result.choice = matches(shown(findCombo() ?? combo), c.option);
+        } else {
+          // Close the list again without choosing anything.
+          combo.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+          trace.push("choice: option not found");
+        }
+      }
+      result.choice = result.choice === true;
+      if (!result.choice) noteExtra = c.hint;
+      trace.push(`choice=${result.choice}`);
+      // The form may have re-rendered: make sure the link is still there.
+      const again = findUrlInput();
+      if (again && again.value !== url) result.url = setValue(again, url);
+    }
     result.ok = result.url;
     noteKind = !result.ok ? "fail" : result.name ? "filled" : "pasted";
 

@@ -46,6 +46,15 @@ export interface AutofillSpec {
   nameLaterMs?: number;
   /** The AI's confirm button label as the student sees it, quoted in the on-page note («Connect»). */
   confirmLabel?: string;
+  /**
+   * A dropdown to set inside the form (ChatGPT: «Autenticación» defaults to «OAuth», but the connector
+   * link has no login, so it must be «Sin autenticación» or ChatGPT fails to connect). `field`
+   * identifies the dropdown (label words); `option` the choice, exact ("=") patterns, most wanted first.
+   * `hint` is told to the student on the page if it can't be set.
+   */
+  choice?: { field: string[]; option: string[]; hint: string };
+  /** Upload the connector icon (FillArgs.iconPng) into the form's PNG file input, if it has one. */
+  icon?: boolean;
 }
 
 export interface FillArgs {
@@ -54,6 +63,8 @@ export interface FillArgs {
   url: string;
   /** Overall budget in ms (page rendering + clicks + form). */
   timeoutMs: number;
+  /** The connector icon as base64 PNG (≤ 10 KB), for specs with `icon`. */
+  iconPng?: string;
 }
 
 export interface FillResult {
@@ -65,6 +76,10 @@ export interface FillResult {
   advanced?: boolean;
   /** The name was not there yet; a watcher keeps looking for it after this result is returned. */
   nameLater?: boolean;
+  /** spec.choice was set (true) or could not be (false); absent when the spec has none. */
+  choice?: boolean;
+  /** The icon was put into the form's file input. */
+  icon?: boolean;
   /** Step-by-step trace, for diagnostics in tests (never shown to the student). */
   trace: string[];
 }

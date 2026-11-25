@@ -130,6 +130,27 @@ test("auto-fill specs: https origins declared as optional host permissions, star
   for (const spec of [claude, chatgpt]) assert.ok(spec.advance === undefined && spec.nameLaterMs === undefined && !spec.steps.some((s) => s.inDialog), spec.id);
 });
 
+test("auto-fill choice (ChatGPT «Autenticación»): exact options only, never OAuth or a confirm word", () => {
+  const c = chatgpt.choice!;
+  assert.ok(c && c.field.length && c.option.length && c.hint.includes("Sin autenticación"));
+  for (const p of c.option) {
+    assert.ok(p.startsWith("=") && p.length > 1, `option "${p}" must be exact`);
+    // «OAuth o sin autenticación» would still try a login the link doesn't have.
+    assert.doesNotMatch(p, /oauth/i);
+    assert.doesNotMatch(p, CONFIRM);
+  }
+  for (const spec of [claude, gemini]) assert.equal(spec.choice, undefined, spec.id);
+});
+
+test("connector icon: a 256 px PNG under ChatGPT's 10 KB limit, copied into the build", () => {
+  const png = readFileSync(new URL("../../extension/icons/connector.png", import.meta.url));
+  assert.ok(png.length <= 10_000, `${png.length} bytes`);
+  assert.equal(png.subarray(1, 4).toString(), "PNG");
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [256, 256]);
+  assert.ok(chatgpt.icon);
+  assert.match(readFileSync(new URL("../../scripts/build.mjs", import.meta.url), "utf8"), /extension\/icons/);
+});
+
 test("root package.json carries the extension's name and version", () => {
   const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { name: string; version: string };
   const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as { version: string };

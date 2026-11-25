@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Complementos | ChatGPT (fixture)</title></head>
+<body>
+<!-- Imitates chatgpt.com/plugins in Spanish as seen live on 2026-11-25 (free plan): «Añadir» opens a
+     menu with «Añadir servidor MCP personalizado»; the dialog has «Elegir icono» (a hidden PNG file
+     input), Nombre, Descripción, a «URL del servidor» / «Túnel» toggle, the URL textbox (aria-label
+     «URL del servidor»), «Autenticación» as a Radix-like combobox showing «OAuth» whose options render
+     in a portal at the end of <body>, the trust checkbox and «Crear como complemento». -->
+<div id="app"></div>
+<script src="common.js"></script>
+<script>
+later(1200, () => {
+  app.innerHTML = `
+    <nav><a href="#">Nuevo chat</a><a href="#">Complementos</a><a href="#c/1" id="pastChat">Añadir servidor MCP personalizado</a></nav>
+    <h1>Complementos</h1>
+    <input type="search" placeholder="Buscar complementos">
+    <button id="add" aria-haspopup="menu">Añadir</button>
+    <div id="menu" role="menu" hidden>
+      <div role="menuitem" tabindex="0">Crear complemento</div>
+      <div role="menuitem" tabindex="0">Subir archivo comprimido del complemento</div>
+      <div role="menuitem" tabindex="0" id="mcpItem">Añadir servidor MCP personalizado</div>
+    </div>`;
+  pastChat.onclick = (e) => { e.preventDefault(); window.__decoyClicks = (window.__decoyClicks || 0) + 1; };
+  add.onpointerdown = () => later(200, () => (menu.hidden = false));
+  mcpItem.onclick = () => {
+    menu.hidden = true;
+    const d = document.createElement("div");
+    d.setAttribute("role", "dialog");
+    d.innerHTML = `
+      <h2>Añadir servidor MCP personalizado</h2>
+      <button type="button" id="pickIcon">Elegir icono</button><input type="file" accept="image/png" id="icon" hidden>
+      <div>Icono (opcional) Solo PNG. Tamaño máximo del archivo: 10 KB</div>
+      <label for="nm">Nombre</label><input id="nm" data-field="name" placeholder="Herramienta personalizada">
+      <label for="ds">Descripción (opcional)</label><textarea id="ds" data-field="description" placeholder="Explica en pocas palabras qué hace"></textarea>
+      <div>Conexión <button type="button" id="modeUrl">URL del servidor</button><button type="button" id="modeTunnel">Túnel</button></div>
+      <input aria-label="URL del servidor" data-field="url" placeholder="https://example.com/mcp">
+      <label id="authLabel">Autenticación</label>
+      <button type="button" role="combobox" aria-labelledby="authLabel" aria-expanded="false" id="auth">OAuth</button>
+      <button type="button" disabled>Ajustes avanzados de OAuth</button>
+      <label><input type="checkbox" id="risk"> Lo entiendo y quiero continuar</label>
+      <button type="button">Cancelar</button>
+      <button data-confirm disabled>Crear como complemento</button>`;
+    document.body.append(d);
+    bindForm(d);
+    window.__state.auth = auth.textContent;
+    icon.onchange = () => (window.__state.icon = icon.files[0] ? `${icon.files[0].type} ${icon.files[0].size}` : "");
+    // The Túnel toggle would swap the URL field away: never pressed.
+    modeTunnel.onclick = () => (window.__decoyClicks = (window.__decoyClicks || 0) + 1);
+    // Radix-like: the list opens on pointerdown, in a portal outside the dialog.
+    auth.onpointerdown = () => later(150, () => {
+      if (document.getElementById("authList")) return;
+      const list = document.createElement("div");
+      list.id = "authList";
+      list.setAttribute("data-radix-popper-content-wrapper", "");
+      list.innerHTML = `<div role="listbox">
+        <div role="option" tabindex="-1">OAuth</div>
+        <div role="option" tabindex="-1" id="optNone"><span>Sin autenticación</span></div>
+        <div role="option" tabindex="-1" id="optBoth">OAuth o sin autenticación</div></div>`;
+      document.body.append(list);
+      auth.setAttribute("aria-expanded", "true");
+      for (const o of list.querySelectorAll("[role=option]")) {
+        o.onclick = () => {
+          auth.textContent = o.textContent;
+          window.__state.auth = o.textContent;
+          if (o.id === "optBoth") window.__decoyClicks = (window.__decoyClicks || 0) + 1;
+          list.remove();
+          auth.setAttribute("aria-expanded", "false");
+        };
+      }
+    });
+  };
+});
+</script>
+</body></html>

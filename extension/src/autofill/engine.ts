@@ -97,10 +97,13 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       !!el.closest(CARD)?.querySelector(FIELD);
     // Step.inDialog: a dialog with a field is allowed, everything else unsafe() checks still applies.
     const unsafeInDialog = (el: HTMLElement) => /^submit$/i.test(el.getAttribute("type") ?? "") || !!el.closest("form") || !!el.closest(CARD)?.querySelector(FIELD);
+    // Never the sidebar: on chatgpt.com a past chat titled "Add custom MCP" matched the step text and
+    // was opened instead of the menu (seen live on 2026-11-25). Steps live in the main page or a dialog.
+    const NAV = "nav, aside, [role='navigation'], [role='complementary']";
     const findClickable = (patterns: string[], inDialog = false): HTMLElement | undefined => {
       let best: { el: HTMLElement; len: number } | undefined;
       for (const el of document.querySelectorAll<HTMLElement>(CLICKABLE)) {
-        if (!visible(el) || (inDialog ? unsafeInDialog(el) : unsafe(el))) continue;
+        if (!visible(el) || el.closest(NAV) || (inDialog ? unsafeInDialog(el) : unsafe(el))) continue;
         const texts = [norm(el.innerText || el.textContent), norm(el.getAttribute("aria-label")), norm(el.getAttribute("title"))];
         const hit = texts.find((t) => matches(t, patterns));
         // The shortest matching text is the most specific element (a button, not the card around it).

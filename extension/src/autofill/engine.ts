@@ -111,8 +111,18 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       }
       return best?.el;
     };
+    // The events of a real mouse click, in order. Some menus (Radix, on chatgpt.com) open on
+    // pointerdown and ignore a bare el.click() (seen live on 2026-11-25).
+    const press = (el: HTMLElement) => {
+      const o = { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1, pointerType: "mouse", isPrimary: true, pointerId: 1 };
+      el.dispatchEvent(new PointerEvent("pointerdown", o));
+      el.dispatchEvent(new MouseEvent("mousedown", o));
+      el.dispatchEvent(new PointerEvent("pointerup", { ...o, buttons: 0 }));
+      el.dispatchEvent(new MouseEvent("mouseup", { ...o, buttons: 0 }));
+      el.click();
+    };
 
-    const describe = (el: HTMLInputElement | HTMLTextAreaElement) => {
+    const describe =(el: HTMLInputElement | HTMLTextAreaElement) => {
       const parts: unknown[] = [el.getAttribute("aria-label"), el.placeholder, el.name, el.id];
       if (el.id) for (const l of document.querySelectorAll(`label[for="${CSS.escape(el.id)}"]`)) parts.push(l.textContent);
       parts.push(el.closest("label")?.textContent);
@@ -165,7 +175,7 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
         const target = findClickable(step.texts) ?? (exact.length ? findClickable(exact, true) : undefined);
         if (target) {
           trace.push(`step ${i}: click "${norm(target.innerText || target.getAttribute("aria-label"))}"`);
-          target.click();
+          press(target);
           clicked = true;
           await sleep(600);
           break;
@@ -176,7 +186,7 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
           const opener = findClickable(step.openers);
           if (opener) {
             trace.push(`step ${i}: opener "${norm(opener.innerText || opener.getAttribute("aria-label"))}"`);
-            opener.click();
+            press(opener);
             await sleep(600);
             continue;
           }
@@ -224,7 +234,7 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
         const next = findAdvance();
         if (next) {
           trace.push(`advance: click "${norm(next.innerText || next.getAttribute("aria-label"))}"`);
-          next.click();
+          press(next);
           result.advanced = true;
           break;
         }

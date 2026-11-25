@@ -13,7 +13,7 @@
 // It clicks nothing unless --click is given, and never an element whose text is a confirm word.
 // usage: node capture-real.mjs --site claude|chatgpt|gemini --step <name> --out <dir>
 //          [--highlight <selector> | --highlight-text <button text>] [--label <text>] [--n <number>]
-//          [--click <selector>] [--hide <selector>] [--clip <selector>] [--pad <px>]
+//          [--click <selector>] [--hide <selector>] [--clip <selector> | --clip-highlight] [--pad <px>]
 // --hide: display:none on those elements (e.g. a sidebar); --clip: crop to that element's box (+pad, default 24).
 import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
@@ -134,6 +134,7 @@ try {
 
   await auditIdentity(page, ident);
 
+  let highlighted; // box of the highlighted element, for --clip-highlight
   if (typeof opts.highlight === "string" || typeof opts["highlight-text"] === "string") {
     let target = opts.highlight;
     if (typeof opts["highlight-text"] === "string") {
@@ -150,15 +151,17 @@ try {
       }
       if (typeof target !== "object") throw new Error(`nothing visible with the text "${opts["highlight-text"]}"`);
     }
+    if (typeof target === "string") target = await page.waitForSelector(target, { timeout: 10000, visible: true });
+    highlighted = await target.boundingBox();
     await highlight(page, target, typeof opts.label === "string" ? opts.label : "", { n: opts.n });
   }
 
   const file = join(out, `${opts.step}.png`);
   let clip;
-  if (typeof opts.clip === "string") {
-    const el = await page.waitForSelector(opts.clip, { timeout: 10000, visible: true });
-    const box = await el.boundingBox();
-    if (!box) throw new Error(`--clip ${opts.clip}: not visible`);
+  if (typeof opts.clip === "string" || opts["clip-highlight"]) {
+    // --clip-highlight: crop around the highlighted element (menus whose container is hard to select).
+    const box = typeof opts.clip === "string" ? await (await page.waitForSelector(opts.clip, { timeout: 10000, visible: true })).boundingBox() : highlighted;
+    if (!box) throw new Error(`--clip: nothing visible to crop to`);
     const pad = Number(opts.pad ?? 24);
     const vw = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
     const x = Math.max(0, box.x - pad), y = Math.max(0, box.y - pad);

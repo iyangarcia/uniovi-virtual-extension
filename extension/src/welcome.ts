@@ -3,7 +3,7 @@
 // built with textContent; the page re-renders when one of its chrome.storage keys changes.
 import { AGENT_KEYS, aiConnectionEnabled, type AgentState, type AgentStats } from "./agent/state.ts";
 import { AI_SPECS, autoConnect, DEV_AUTOFILL_KEY } from "./autofill/index.ts";
-import type { AiId } from "./autofill/types.ts";
+import type { AiId, FillResult } from "./autofill/types.ts";
 import type { SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
 import { copyText, flash, h, updateNotice } from "./ui/dom.ts";
@@ -22,7 +22,8 @@ interface CardText {
   plan: string;
   planWarn?: boolean;
   steps: string[];
-  ok: string;
+  /** Shown on the card after a fill; a function when it depends on how far the fill got. */
+  ok: string | ((result: FillResult) => string);
 }
 
 const CARDS: Record<AiId, CardText> = {
@@ -43,7 +44,6 @@ const CARDS: Record<AiId, CardText> = {
       "En chatgpt.com/plugins pulsa «+» → «Add custom MCP server».",
       "Nombre: Uniovi Virtual. URL: pega el enlace (Ctrl+V).",
       "Marca que confías en la aplicación y pulsa el botón para crearla.",
-      "¿Menú antiguo? Ajustes → Conectores → Avanzado → Modo desarrollador.",
     ],
     ok: "✓ Listo: en la pestaña de ChatGPT revisa los datos y pulsa tú el botón para crearlo.",
   },
@@ -52,11 +52,16 @@ const CARDS: Record<AiId, CardText> = {
     planWarn: true,
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
-      "Abre gemini.google.com/devmode → «Create new».",
-      "En «MCP Server URL» pega el enlace (Ctrl+V) → Next → marca el aviso → Connect.",
-      "Nombre: Uniovi Virtual → Connect. Al preguntar, responde «Permitir siempre».",
+      "En gemini.google.com/devmode: «Create new» → pega el enlace en «MCP server URL» (Ctrl+V) → «Next».",
+      "Marca tú el aviso y pulsa «Connect».",
+      "Nombre: Uniovi Virtual → «Connect». Al preguntar, responde «Permitir siempre».",
     ],
-    ok: "✓ Listo: en la pestaña de Gemini revisa los datos y pulsa tú el botón para añadirla.",
+    ok: (r) =>
+      r.advanced
+        ? "✓ Enlace pegado: en la pestaña de Gemini marca tú el aviso y pulsa «Connect». Después escribo yo el nombre; revísalo y pulsa «Connect» otra vez."
+        : r.name
+          ? "✓ Listo: en la pestaña de Gemini revisa los datos y pulsa tú el botón para añadirla."
+          : "✓ Enlace pegado: en la pestaña de Gemini pulsa «Next», marca el aviso y pulsa «Connect». Después escribo yo el nombre.",
   },
 };
 
@@ -87,7 +92,7 @@ function card(id: AiId): HTMLElement {
       const outcome = await autoConnect(spec, link, permission, dev ?? spec.startUrl);
       result.hidden = false;
       result.className = `result ${outcome.ok ? "ok" : "warn"}`;
-      result.textContent = outcome.ok ? text.ok : FAIL;
+      result.textContent = !outcome.ok ? FAIL : typeof text.ok === "string" ? text.ok : text.ok(outcome.result);
       result.dataset.outcome = outcome.ok ? "ok" : outcome.reason;
       auto.disabled = false;
     })();

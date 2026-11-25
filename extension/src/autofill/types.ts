@@ -13,6 +13,12 @@ export interface AutofillStep {
   texts: string[];
   /** Clicked only when none of `texts` shows up (e.g. a "+" that opens a menu holding them). */
   openers?: string[];
+  /**
+   * The button sits in a dialog that also has a field (Gemini's «Search apps» list with «Create new»):
+   * the exact ("=") texts of this step may then be clicked inside such a dialog, which is otherwise
+   * off limits. Substring texts never are, and none of the texts may be a confirm word (ux.test.ts).
+   */
+  inDialog?: boolean;
 }
 
 export interface AutofillSpec {
@@ -28,6 +34,18 @@ export interface AutofillSpec {
   urlField: string[];
   /** Words that identify the name input. */
   nameField: string[];
+  /**
+   * Multi-screen forms (Gemini): exact-match ("=next") forward buttons, clicked once after the URL is
+   * filled and only inside the URL field's own dialog or form. Never a confirm word (ux.test.ts).
+   */
+  advance?: string[];
+  /**
+   * The name field shows up only after the student's own confirm (Gemini): keep watching for it this
+   * long (ms) after fillConnector returns, fill it once if it is empty, and never click anything.
+   */
+  nameLaterMs?: number;
+  /** The AI's confirm button label as the student sees it, quoted in the on-page note («Connect»). */
+  confirmLabel?: string;
 }
 
 export interface FillArgs {
@@ -43,6 +61,10 @@ export interface FillResult {
   /** Which fields were filled. */
   url: boolean;
   name: boolean;
+  /** An `advance` button was pressed (multi-screen forms). */
+  advanced?: boolean;
+  /** The name was not there yet; a watcher keeps looking for it after this result is returned. */
+  nameLater?: boolean;
   /** Step-by-step trace, for diagnostics in tests (never shown to the student). */
   trace: string[];
 }

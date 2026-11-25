@@ -37,7 +37,7 @@ const CARDS: Record<AiId, CardText> = {
     ok: "✓ Listo: en la pestaña de Claude revisa los datos y pulsa tú «Añadir».",
   },
   chatgpt: {
-    plan: "Necesitas ChatGPT Plus o superior: el plan gratuito no permite conectores.",
+    plan: "Funciona también con el plan gratuito.",
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
       "En chatgpt.com/plugins pulsa «+» → «Add custom MCP server».",
@@ -48,13 +48,13 @@ const CARDS: Record<AiId, CardText> = {
     ok: "✓ Listo: en la pestaña de ChatGPT revisa los datos y pulsa tú el botón para crearlo.",
   },
   gemini: {
-    plan: "Puede que aún no esté disponible en España: de momento solo aparece en EE. UU. y en inglés.",
+    plan: "Avanzado: en España funciona desde el «Modo desarrollador» de Gemini, con más pasos y en inglés.",
     planWarn: true,
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
-      "En Gemini: Ajustes → Apps conectadas → «Add a custom app».",
-      "Nombre: Uniovi Virtual. URL: pega el enlace (Ctrl+V).",
-      "Confirma para añadirla.",
+      "Abre gemini.google.com/devmode → «Create new».",
+      "En «MCP Server URL» pega el enlace (Ctrl+V) → Next → marca el aviso → Connect.",
+      "Nombre: Uniovi Virtual → Connect. Al preguntar, responde «Permitir siempre».",
     ],
     ok: "✓ Listo: en la pestaña de Gemini revisa los datos y pulsa tú el botón para añadirla.",
   },

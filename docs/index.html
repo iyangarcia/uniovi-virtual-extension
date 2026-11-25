@@ -1,235 +1,124 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Uniovi Virtual para tu IA</title>
-  <meta name="description" content="Extensión gratuita de Chrome: pregunta a Claude o ChatGPT por tus apuntes, exámenes y avisos del Campus Virtual de la Universidad de Oviedo." />
-  <link rel="icon" href="img/icono.png" />
-  <style>
-    :root {
-      --bg: #f6f7f9;
-      --card: #ffffff;
-      --text: #1d2125;
-      --muted: #5b636b;
-      --line: #dde1e6;
-      --accent: #0b6e4f;
-      --accent-text: #ffffff;
-      --mark: #e8590c;
-      --code: #eef1f4;
-      color-scheme: light dark;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #15181b;
-        --card: #1f2327;
-        --text: #e8eaed;
-        --muted: #a5adb5;
-        --line: #343a40;
-        --accent: #3cc08f;
-        --accent-text: #0b1a14;
-        --mark: #ff8a3d;
-        --code: #2a3036;
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 17px/1.55 system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
-    header { text-align: center; padding: 24px 0 8px; }
-    header img { width: 72px; height: 72px; }
-    h1 { font-size: 2rem; line-height: 1.2; margin: 12px 0 8px; }
-    h2 { font-size: 1.35rem; margin: 40px 0 12px; }
-    h3 { font-size: 1.1rem; margin: 0 0 6px; }
-    p { margin: 0 0 12px; }
-    .lead { font-size: 1.15rem; color: var(--muted); max-width: 34em; margin: 0 auto 24px; }
-    .download {
-      display: inline-block;
-      background: var(--accent);
-      color: var(--accent-text);
-      font-size: 1.35rem;
-      font-weight: 700;
-      text-decoration: none;
-      padding: 18px 40px;
-      border-radius: 14px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-    }
-    .download:hover, .download:focus-visible { filter: brightness(1.08); }
-    .download:focus-visible { outline: 3px solid var(--mark); outline-offset: 3px; }
-    .small { font-size: 0.92rem; color: var(--muted); margin-top: 10px; }
-    .step {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 18px;
-      margin: 0 0 16px;
-    }
-    .step-head { display: flex; gap: 12px; align-items: baseline; }
-    .num {
-      flex: none;
-      width: 34px; height: 34px;
-      border-radius: 50%;
-      background: var(--mark);
-      color: #fff;
-      font-weight: 700;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .step img {
-      display: block;
-      width: 100%;
-      height: auto;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      margin: 12px 0 4px;
-    }
-    ol, ul { padding-left: 1.3em; margin: 0 0 12px; }
-    li { margin: 4px 0; }
-    code {
-      background: var(--code);
-      border-radius: 6px;
-      padding: 1px 6px;
-      font-size: 0.95em;
-      word-break: break-all;
-    }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
-    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
-    tr:last-child td { border-bottom: none; }
-    th { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
-    .yes { color: var(--accent); font-weight: 700; }
-    .no { color: var(--muted); }
-    @media (max-width: 560px) {
-      thead { display: none; }
-      table, tbody, tr, td { display: block; width: 100%; }
-      tr { border-bottom: 1px solid var(--line); padding: 10px 0; }
-      tr:last-child { border-bottom: none; }
-      td { border: none; padding: 2px 14px; }
-    }
-    .box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
-    details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 0 0 10px; }
-    summary { cursor: pointer; font-weight: 600; }
-    details p { margin: 10px 0 0; }
-    a { color: var(--accent); }
-    footer { margin-top: 48px; text-align: center; color: var(--muted); font-size: 0.92rem; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uniovi Virtual: guía de instalación</title>
+<meta name="description" content="Conecta tu Campus Virtual con tu IA (Claude, ChatGPT o Gemini). Guía de instalación paso a paso.">
+<link rel="icon" href="img/icono.png">
+<style>
+  body { font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 760px; margin: 0 auto; padding: 16px; color: #1a1a1a; background: #fff; }
+  img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 6px; margin: 8px 0; }
+  h1 { margin-bottom: 0; } h2 { margin-top: 2em; border-bottom: 1px solid #ddd; }
+  code { background: #f2f2f2; padding: 1px 5px; border-radius: 4px; }
+  .descargar { display: inline-block; background: #0b5cad; color: #fff; padding: 12px 28px; border-radius: 8px; font-size: 1.2em; text-decoration: none; }
+  .nota { background: #fff7e0; border-left: 4px solid #f0b400; padding: 8px 12px; }
+  small { color: #555; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #161616; color: #e8e8e8; } code { background: #2a2a2a; }
+    .nota { background: #2e2810; } small { color: #aaa; } img, h2 { border-color: #333; }
+  }
+</style>
 </head>
 <body>
-<main>
-  <header>
-    <img src="img/icono.png" alt="" />
-    <h1>Uniovi Virtual para tu IA</h1>
-    <p class="lead">Pregunta a Claude o ChatGPT por <strong>tus apuntes, tus exámenes y los avisos</strong> del Campus Virtual. Por ejemplo: «¿Qué exámenes tengo esta semana?» o «Explícame el tema 3 de Civil».</p>
-    <a class="download" href="https://github.com/iyangarcia/uniovi-virtual-extension/releases/latest/download/uniovi-virtual.zip">Descargar</a>
-    <p class="small">Gratis · Para Google Chrome en el ordenador</p>
-  </header>
 
-  <h2>Instálala en 3 pasos</h2>
+<h1>Uniovi Virtual</h1>
+<p>Conecta tu <strong>Campus Virtual</strong> con tu IA (Claude, ChatGPT o Gemini) para preguntarle por tus exámenes, entregas, avisos y apuntes.
+Tus archivos se guardan solo en tu ordenador.</p>
 
-  <section class="step">
-    <div class="step-head"><span class="num">1</span><h3>Descomprime la carpeta</h3></div>
-    <ol>
-      <li>Abre la carpeta <strong>Descargas</strong> y haz clic derecho en <code>uniovi-virtual.zip</code>.</li>
-      <li>Elige <strong>Extraer todo…</strong></li>
-      <li>Pulsa <strong>Examinar…</strong>, elige <strong>Documentos</strong> y pulsa <strong>Extraer</strong>.</li>
-    </ol>
-    <p>Así tendrás la carpeta <code>uniovi-virtual</code> dentro de Documentos. <strong>No la borres ni la muevas</strong>: Chrome la usa.</p>
-    <img src="img/paso1-extraer.png" alt="Clic derecho en uniovi-virtual.zip, Extraer todo, y como destino la carpeta Documentos." loading="lazy" />
-    <p class="small">En Mac basta con hacer doble clic en el zip y mover la carpeta a Documentos.</p>
-  </section>
+<p class="nota"><strong>Necesitas:</strong> un ordenador (Windows o Mac) con <strong>Google Chrome</strong>. También vale Edge o Brave.
+En Mac usa Chrome, no Safari. No funciona en el móvil, aunque sí puedes preguntar a tu IA desde el móvil si Chrome está abierto en tu ordenador.</p>
 
-  <section class="step">
-    <div class="step-head"><span class="num">2</span><h3>Activa el modo desarrollador en Chrome</h3></div>
-    <ol>
-      <li>Abre Chrome y escribe <code>chrome://extensions</code> en la barra de direcciones. Pulsa Intro.</li>
-      <li>Arriba a la derecha, activa <strong>Modo Desarrollador</strong>.</li>
-    </ol>
-    <img src="img/paso2-modo-desarrollador.png" alt="La página de extensiones de Chrome con el interruptor Modo Desarrollador señalado, arriba a la derecha." loading="lazy" />
-    <ol start="3">
-      <li>Aparecen unos botones nuevos. Pulsa <strong>Cargar descomprimida</strong>.</li>
-    </ol>
-    <img src="img/paso2-cargar-descomprimida.png" alt="Con el modo desarrollador activado aparece el botón Cargar descomprimida, señalado arriba a la izquierda." loading="lazy" />
-  </section>
+<p><a class="descargar" href="https://github.com/iyangarcia/uniovi-virtual-extension/releases/latest/download/uniovi-virtual.zip">⬇ Descargar</a></p>
 
-  <section class="step">
-    <div class="step-head"><span class="num">3</span><h3>Elige la carpeta</h3></div>
-    <ol>
-      <li>Se abre una ventana para elegir carpeta. Ve a <strong>Documentos</strong>.</li>
-      <li>Haz <strong>un solo clic</strong> en la carpeta <code>uniovi-virtual</code> y pulsa <strong>Seleccionar carpeta</strong>.</li>
-    </ol>
-    <p>Ya está: aparece <strong>Uniovi Virtual</strong> en la lista y se abre una página de bienvenida que te guía con el resto (entrar en el campus y conectar tu IA).</p>
-    <img src="img/paso3-extension-cargada.png" alt="La extensión Uniovi Virtual ya aparece en la lista de extensiones de Chrome." loading="lazy" />
-    <img src="img/welcome.png" alt="La página de bienvenida de Uniovi Virtual, con los pasos que faltan." loading="lazy" />
-  </section>
-
-  <h2>¿Qué IA puedo usar?</h2>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>IA</th><th>¿Funciona?</th><th>Qué necesitas</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Claude</strong> (claude.ai)</td><td class="yes">Sí, gratis</td><td>Una cuenta gratuita. El plan gratis permite 1 conector, justo el que necesitas. <strong>Es la opción recomendada.</strong></td></tr>
-        <tr><td><strong>ChatGPT</strong></td><td class="yes">Sí, de pago</td><td>Plan Plus o superior. El plan gratuito no permite añadir conectores.</td></tr>
-        <tr><td><strong>Gemini</strong></td><td class="no">Probablemente aún no</td><td>De momento, esta opción no parece estar disponible en España.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="small">La página de bienvenida de la extensión tiene un botón para conectar cada IA casi sin escribir nada.</p>
-
-  <h2>Tu privacidad</h2>
-  <div class="box">
+<h2>1. Instalar (2 minutos)</h2>
+<ol>
+  <li><strong>Descomprime el zip</strong> y guarda la carpeta en <strong>Documentos</strong>. No la borres después: Chrome la usa.
     <ul>
-      <li><strong>Tus archivos se quedan en tu ordenador</strong>, dentro de Chrome. No se suben a ningún sitio.</li>
-      <li>Tus preguntas y las respuestas pasan por el servicio de conexión, que <strong>no guarda nada</strong>.</li>
-      <li>El enlace que pegas en tu IA es <strong>personal</strong>: no lo compartas con nadie.</li>
+      <li><strong>Windows:</strong> clic derecho en el zip → <em>Extraer todo</em> → elige Documentos.</li>
+      <li><strong>Mac:</strong> doble clic en el zip y mueve la carpeta <code>uniovi-virtual</code> a Documentos.</li>
     </ul>
-  </div>
+    <img src="img/paso1-extraer.png" alt="Extraer todo en Windows">
+  </li>
+  <li>En Chrome, escribe <code>chrome://extensions</code> en la barra de direcciones y pulsa Enter.</li>
+  <li>Activa <strong>Modo desarrollador</strong> (arriba a la derecha).
+    <img src="img/paso2-modo-desarrollador.png" alt="Interruptor Modo desarrollador"></li>
+  <li>Pulsa <strong>Cargar descomprimida</strong> y elige la carpeta <code>uniovi-virtual</code> de Documentos.
+    En Mac, si pregunta por acceso a Documentos, pulsa <em>Permitir</em>.
+    <img src="img/paso2-cargar-descomprimida.png" alt="Botón Cargar descomprimida"></li>
+  <li>Listo: aparece <strong>Uniovi Virtual</strong> y se abre una página de bienvenida.
+    <img src="img/paso3-extension-cargada.png" alt="Extensión cargada"></li>
+</ol>
+<p><small>Consejo: fija el icono con la pieza de puzle 🧩 de arriba a la derecha → chincheta, para tenerlo siempre a mano.</small></p>
 
-  <h2>Cómo actualizar</h2>
-  <p>Cuando haya una versión nueva, la extensión te avisará con «Hay una versión nueva». Entonces:</p>
-  <ol>
-    <li>Pulsa <strong>Descargar</strong> en esta página otra vez.</li>
-    <li>Extrae el zip <strong>en el mismo sitio</strong> (Documentos). Si Windows pregunta, elige <strong>Reemplazar los archivos en el destino</strong>.</li>
-    <li>Abre <code>chrome://extensions</code> y pulsa la flecha circular <strong>⟳</strong> en la tarjeta de Uniovi Virtual.</li>
-  </ol>
-  <p>Tus apuntes y el enlace de tu IA se mantienen: no tienes que volver a conectar nada.</p>
+<h2>2. Sincronizar el campus</h2>
+<p>Entra en el <a href="https://www.campusvirtual.uniovi.es/">Campus Virtual</a> con tu usuario, como siempre.
+La extensión copia tus asignaturas, avisos, fechas y apuntes. <strong>La primera vez tarda unos minutos</strong>: deja la pestaña abierta.
+Después se actualiza sola cada vez que entras.</p>
+<img src="img/welcome.png" alt="Página de bienvenida con los pasos">
 
-  <h2>Preguntas frecuentes</h2>
-  <details>
-    <summary>¿Es seguro el modo desarrollador?</summary>
-    <p>Sí. Solo permite cargar una extensión desde una carpeta de tu ordenador en lugar de desde la tienda de Chrome. No cambia nada más. Chrome puede recordarte de vez en cuando que tienes una extensión así: es normal, déjala activada.</p>
-  </details>
-  <details>
-    <summary>¿Por qué no está en la Chrome Web Store?</summary>
-    <p>Es un proyecto pequeño y gratuito hecho por un estudiante. Publicar en la tienda exige una cuenta de desarrollador y pasar una revisión con cada versión. El código es público, así que cualquiera puede revisar lo que hace.</p>
-  </details>
-  <details>
-    <summary>Si cierro Chrome, ¿funciona?</summary>
-    <p>No. Tu IA solo puede leer tus apuntes mientras Chrome está abierto en tu ordenador (no hace falta tener el campus abierto). Si Chrome está cerrado, la IA te dirá que abras Chrome; ábrelo y vuelve a preguntar.</p>
-  </details>
-  <details>
-    <summary>¿Puedo usarla desde el móvil?</summary>
-    <p>La extensión se instala en el ordenador. Una vez conectada, puedes preguntar a tu IA desde el móvil, siempre que Chrome siga abierto en tu ordenador.</p>
-  </details>
-  <details>
-    <summary>¿La extensión ve mi contraseña del campus?</summary>
-    <p>No. Usa la sesión que ya tienes abierta en Chrome, como si navegaras tú. Solo lee: nunca publica ni entrega nada en el campus.</p>
-  </details>
-  <details>
-    <summary>Chrome dice «Falta el archivo de manifiesto»</summary>
-    <p>Has elegido una carpeta de más o de menos. Elige la carpeta <code>uniovi-virtual</code> que tiene dentro un archivo llamado <code>manifest.json</code>. A veces está dentro de otra carpeta con el mismo nombre: entra en la de fuera y elige la de dentro.</p>
-  </details>
-  <details>
-    <summary>¿Y si quito la extensión?</summary>
-    <p>Se borran las copias de tus apuntes que guardaba (están en el campus, así que se vuelven a descargar si la instalas de nuevo). Tendrías que conectar tu IA otra vez con el enlace nuevo.</p>
-  </details>
+<h2>3. Conectar tu IA (una sola vez)</h2>
+<p>En la página de bienvenida (o en el icono de la extensión) elige tu IA y pulsa <strong>Conectar automáticamente</strong>:
+se abre tu IA con los datos ya rellenados y solo tienes que pulsar su botón de confirmar.
+Si no funciona, pulsa <strong>Copiar enlace</strong> y pégalo a mano:</p>
+<ul>
+  <li><strong>Claude</strong> (gratis, recomendado): en claude.ai → <em>Personalizar → Conectores → Añadir conector personalizado</em>.
+    Nombre: <code>Uniovi Virtual</code>, URL: pega el enlace → <em>Añadir</em>.</li>
+  <li><strong>ChatGPT</strong> (también gratis): en <code>chatgpt.com/plugins</code> pulsa <em>+</em> → <em>Add custom MCP server</em>.
+    Nombre: <code>Uniovi Virtual</code>, URL: pega el enlace, marca que confías en la aplicación y créala.</li>
+  <li><strong>Gemini</strong> (avanzado, en inglés): abre <code>gemini.google.com/devmode</code> → <em>Create new</em> →
+    pega el enlace en <em>MCP Server URL</em> → <em>Next</em> → marca el aviso → <em>Connect</em> → nombre → <em>Connect</em>.
+    En el chat escribe <code>@Uniovi Virtual</code> y, cuando pregunte, responde <em>Permitir siempre</em>.
+    Su plan gratuito se agota rápido.</li>
+</ul>
+<p class="nota"><strong>Importante:</strong> tu IA solo puede leer tus apuntes mientras <strong>Chrome esté abierto en tu ordenador</strong>.
+El enlace es personal: no lo compartas.</p>
 
-  <footer>
-    <p><a href="https://github.com/iyangarcia/uniovi-virtual-extension/blob/master/docs/USO-CON-IA-WEB.md">Guía completa paso a paso</a> · <a href="https://github.com/iyangarcia/uniovi-virtual-extension">Código fuente</a></p>
-    <p>Proyecto de estudiantes, no oficial de la Universidad de Oviedo.</p>
-  </footer>
-</main>
+<h2>4. Pruébalo</h2>
+<p>Pregúntale a tu IA, por ejemplo:</p>
+<ul>
+  <li>«¿Qué exámenes y entregas tengo este mes?»</li>
+  <li>«¿Hay avisos nuevos en mis asignaturas esta semana?»</li>
+  <li>«Hazme un resumen del tema 3 de Derecho Civil»</li>
+  <li>«Hazme 10 preguntas tipo test sobre el tema 2»</li>
+</ul>
+
+<h2>5. Mis apuntes</h2>
+<p>Pulsa el icono de la extensión → <strong>Mis apuntes</strong> para ver todos tus archivos del campus por asignatura,
+buscar dentro de ellos y abrir dos a la vez (por ejemplo, ejercicios y soluciones).</p>
+<img src="img/mis-apuntes.png" alt="Página Mis apuntes">
+
+<h2>Si algo no funciona</h2>
+<ul>
+  <li><strong>La IA dice «Uniovi Virtual no está conectado»:</strong> abre Chrome en tu ordenador y espera unos segundos.</li>
+  <li><strong>La IA no encuentra nada:</strong> entra una vez en el Campus Virtual y espera a que termine de sincronizar.
+    También puedes pulsar <em>Sincronizar ahora</em> en el icono de la extensión.</li>
+  <li><strong>«Conectar automáticamente» no hizo nada:</strong> usa <em>Copiar enlace</em> y pégalo a mano (paso 3).</li>
+  <li><strong>Crees que alguien tiene tu enlace:</strong> icono de la extensión → <em>Opciones avanzadas → Cambiar enlace</em>,
+    y pega el nuevo en tu IA.</li>
+  <li><strong>Otra cosa:</strong> manda una captura a quien te pasó esta página.</li>
+</ul>
+
+<h2>Actualizar</h2>
+<p>Si la extensión avisa de una versión nueva: descarga el zip de esta página, descomprímelo <strong>encima de la misma carpeta</strong> de Documentos
+(reemplazando los archivos) y pulsa ⟳ en <code>chrome://extensions</code>. No pierdes nada ni tienes que volver a conectar tu IA.</p>
+
+<h2>Desinstalar</h2>
+<p>En <code>chrome://extensions</code> pulsa <em>Quitar</em> en Uniovi Virtual y borra la carpeta de Documentos.
+Se borran todos los datos que guardaba. Quita también el conector en tu IA.</p>
+
+<h2>Privacidad</h2>
+<ul>
+  <li>Tus archivos y datos del campus se guardan <strong>solo en tu ordenador</strong>, dentro de Chrome.</li>
+  <li>Cuando preguntas, tu IA recibe solo los fragmentos que necesita para responder.</li>
+  <li>Las preguntas pasan por un pequeño puente (Cloudflare) que no guarda nada.</li>
+  <li>Tu contraseña del campus nunca sale de tu navegador: la extensión usa tu sesión abierta.</li>
+  <li>Si no quieres que tu IA use tus chats para entrenar, desactiva «mejorar el modelo» en sus ajustes.</li>
+</ul>
+
+<hr>
+<p><small>Proyecto no oficial, hecho por un estudiante. No está afiliado a la Universidad de Oviedo.
+<a href="https://github.com/iyangarcia/uniovi-virtual-extension">Código fuente</a>.</small></p>
+
 </body>
 </html>

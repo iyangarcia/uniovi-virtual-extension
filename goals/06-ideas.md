@@ -85,3 +85,70 @@ Every tool call's output counts against the AI's limits. Ideas:
 
 Measure the tool-output sizes on real data before and after. Students should still be told: Claude (free) is
 recommended; Gemini is advanced and its free quota is small.
+
+## 5. One shared connector with OAuth (next goal after the pilot, before the Web Store)
+
+**Problem.** Today each student has a personal URL `…/mcp/<id>/<token>`, and the token in it is the
+password. Claude's and ChatGPT's "share connector" button therefore shares the student's own campus data.
+The guide says "no lo compartas", but the button makes sharing feel normal.
+
+**Idea.** One URL for everyone (e.g. `https://<relay>/mcp`), with nothing secret in it, plus OAuth 2.1 in the
+Worker:
+- dynamic client registration;
+- an authorize page;
+- a token endpoint;
+- the access token maps to the student's agent id.
+
+Whoever adds the connector logs in through **their own** extension, so they only ever see their own campus.
+Then sharing is safe, and it becomes a way to spread the tool: one student shares the connector and a
+classmate adds it in one click.
+
+How the login works:
+- **Approval.** The authorize page opens in the student's Chrome, and the extension approves with its
+  identity.
+- **Safety.** No silent approval for any site. Show one «Permitir» button, and approve only when the
+  `redirect_uri` belongs to claude.ai, chatgpt.com or gemini.google.com. Without this, a malicious site could
+  start a login and receive the student's data.
+- **No extension:** if the extension isn't installed, the authorize page says «Instala Uniovi Virtual
+  primero» with the guide link, never a bare error.
+- **Personal links** (`/mcp/<id>/<token>`) keep working: existing students change nothing, and they remain
+  the fallback for Gemini.
+- **Cambiar enlace** also revokes the student's OAuth tokens.
+
+Check first, with a prototype:
+- Does a shared Claude or ChatGPT connector really carry over to another person's personal account, or only
+  within a workspace?
+- Does Gemini Developer Mode accept OAuth servers?
+
+About 1–2 days of work.
+
+### Directories (after OAuth; a bonus, don't plan the rollout around it)
+
+Same shared URL; submit once OAuth works. Every tool is already marked read-only (`6fc7c50`).
+
+- **Claude Connectors Directory** (claude.ai/directory/manage).
+  - Needs OAuth, privacy policy, docs, a test account.
+  - No official review time and no fast track.
+- **ChatGPT plugins** (OpenAI developer platform).
+  - Needs a verified developer account, a `/.well-known/openai-apps-challenge` file on the relay, privacy and
+    terms URLs, test cases.
+  - Forum reports: 3 weeks to over 3 months, sometimes rejected with no reason.
+- **Gemini.** Google's "Connected Apps" (October 2026) takes remote MCP servers, but it's a US-only waitlist
+  preview, so not an option for us yet. Check again in a few months.
+- **Reviewer demo mode.** Reviewers can't install the extension and sign in to Uniovi. The relay needs a demo
+  account that answers with fake sample courses (about half a day). Never real data.
+- **Privacy policy.** Shared with the Web Store (`docs/privacidad.html`).
+- **Approval is not guaranteed** for an unofficial app built around one university.
+
+### Gemini: workarounds (many students use it)
+
+Gemini can't share connectors, and its directory isn't open to us. Options, simplest first:
+1. **Developer Mode with the personal link** (works today). Auto-fill already opens `gemini.google.com/devmode`.
+   Improve the guide with pictures, and check whether the read-only annotations removed the per-tool prompts.
+2. **Through Google Drive / NotebookLM** (idea, to check). Gemini and NotebookLM already read the student's
+   Google Drive natively, and NotebookLM is popular with students.
+   - A «Copiar a Google Drive» button (per course) would put the campus files in a "Uniovi Virtual" Drive
+     folder. Gemini (`@Google Drive`) and NotebookLM could then use them with no connector at all.
+   - Costs: the Google Drive permission (`identity` + Drive scope), and files are copies, so they need re-sync.
+   - Simpler first step: «Descargar asignatura» as a zip, for uploading to NotebookLM or Gemini by hand.
+3. **Wait for Google's Connected Apps** to open outside the US, then submit the OAuth URL there as well.

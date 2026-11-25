@@ -156,7 +156,7 @@ try {
   const file = join(out, `${opts.step}.png`);
   let clip;
   if (typeof opts.clip === "string") {
-    const el = await page.waitForSelector(opts.clip, { timeout: 10000 });
+    const el = await page.waitForSelector(opts.clip, { timeout: 10000, visible: true });
     const box = await el.boundingBox();
     if (!box) throw new Error(`--clip ${opts.clip}: not visible`);
     const pad = Number(opts.pad ?? 24);

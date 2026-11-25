@@ -10,7 +10,7 @@ test profile at your real campus data except in the checks below that are about 
 ## 0. Release (once per version)
 
 **First time only:**
-- [ ] Deploy the relay: follow [relay/DESPLIEGUE.md](../relay/DESPLIEGUE.md) (Cloudflare account, `npx wrangler login`, `npx wrangler deploy`). `curl https://<relay>/` answers `Uniovi Virtual relay`.
+- [ ] Deploy the relay: follow [relay/DESPLIEGUE.md](../relay/DESPLIEGUE.md) (Cloudflare account, `npx wrangler login`, `npx wrangler deploy`). `curl https://<relay>/` shows a short "Uniovi Virtual" page (its icon is at `/icon.png`).
 - [ ] Put that URL in `RELAY_URL` in `shared/relay.ts` (no trailing slash). Never change it afterwards: every student's pasted link depends on it.
 - [ ] Make the GitHub repository **public** (Settings → General → Danger Zone → Change visibility). Pages and the unauthenticated releases API (the update check) need it.
 - [ ] Enable GitHub Pages: Settings → Pages → Source "Deploy from a branch", branch `gh-pages`, folder `/ (root)`. That branch holds only a manual copy of `docs/index.html` and `docs/img/` (see "Publicar la guía" below). After a minute, <https://iyangarcia.github.io/uniovi-virtual-extension/> shows the download page with its pictures.

@@ -41,6 +41,12 @@ export interface Env {
   TEST_REQUEST_TIMEOUT_MS?: string;
 }
 
+const HOME_PAGE =
+  '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Uniovi Virtual</title>' +
+  '<link rel="icon" type="image/png" sizes="128x128" href="/icon.png"></head><body>' +
+  '<p>Uniovi Virtual: conecta tu Campus Virtual con tu IA. ' +
+  '<a href="https://iyangarcia.github.io/uniovi-virtual-extension/">Guía de instalación</a></p></body></html>';
+
 const text = (status: number, body: string) =>
   new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 
@@ -50,7 +56,8 @@ export default {
     const r = route(request.method, url.pathname, url.search);
     switch (r.kind) {
       case "health":
-        return text(200, "Uniovi Virtual relay");
+        // A tiny page whose <link rel="icon"> lets favicon services (and AI sites) find the connector icon.
+        return new Response(HOME_PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
       case "icon":
         return new Response(ICON, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
       case "agent":

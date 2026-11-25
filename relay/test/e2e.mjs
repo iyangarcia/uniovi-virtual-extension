@@ -57,7 +57,8 @@ async function main() {
   // Health and plain 404s.
   {
     const r = await fetch(`${RELAY}/`);
-    check("GET / health", r.status === 200 && (await r.text()) === "Uniovi Virtual relay", `status ${r.status}`);
+    const home = await r.text();
+    check("GET / home page links the icon", r.status === 200 && home.includes('rel="icon"') && home.includes("/icon.png"), `status ${r.status}`);
     const foo = await fetch(`${RELAY}/foo`);
     check("/foo → 404", foo.status === 404, `status ${foo.status}`);
     const bad = await post(`${RELAY}/mcp/not-a-valid-id/x`, "{}");

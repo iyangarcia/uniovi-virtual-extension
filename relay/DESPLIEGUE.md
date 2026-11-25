@@ -54,7 +54,7 @@ funcionar y tendrán que pegar el nuevo. Elige la dirección una vez y no la cam
 curl https://uniovi-relay.<subdominio>.workers.dev/
 ```
 
-Debe responder `Uniovi Virtual relay`. Cualquier otra dirección (por ejemplo `/hola`) responde `Not found`.
+Debe mostrar una página corta «Uniovi Virtual» (su icono está en `/icon.png`). Cualquier otra dirección (por ejemplo `/hola`) responde `Not found`.
 
 Con la extensión instalada y Chrome abierto, la IA del estudiante ya debería poder usar sus apuntes. Si Chrome
 está cerrado, la IA recibe el mensaje "Uniovi Virtual no está conectado: abre Chrome…".

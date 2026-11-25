@@ -13,10 +13,12 @@
   code { background: #f2f2f2; padding: 1px 5px; border-radius: 4px; }
   .descargar { display: inline-block; background: #0b5cad; color: #fff; padding: 12px 28px; border-radius: 8px; font-size: 1.2em; text-decoration: none; }
   .nota { background: #fff7e0; border-left: 4px solid #f0b400; padding: 8px 12px; }
+  h3 { margin: 1.5em 0 0.3em; }
+  figure { margin: 8px 0 12px; } figcaption { font-size: 0.9em; color: #555; }
   small { color: #555; }
   @media (prefers-color-scheme: dark) {
     body { background: #161616; color: #e8e8e8; } code { background: #2a2a2a; }
-    .nota { background: #2e2810; } small { color: #aaa; } img, h2 { border-color: #333; }
+    .nota { background: #2e2810; } small, figcaption { color: #aaa; } img, h2 { border-color: #333; }
   }
 </style>
 </head>
@@ -61,16 +63,43 @@ Después se actualiza sola cada vez que entras.</p>
 <p>En la página de bienvenida (o en el icono de la extensión) elige tu IA y pulsa <strong>Conectar automáticamente</strong>:
 se abre tu IA con los datos ya rellenados y solo tienes que pulsar su botón de confirmar.
 Si no funciona, pulsa <strong>Copiar enlace</strong> y pégalo a mano:</p>
-<ul>
-  <li><strong>Claude</strong> (gratis, recomendado): en claude.ai → <em>Personalizar → Conectores → Añadir conector personalizado</em>.
-    Nombre: <code>Uniovi Virtual</code>, URL: pega el enlace → <em>Añadir</em>.</li>
-  <li><strong>ChatGPT</strong> (también gratis): en <code>chatgpt.com/plugins</code> pulsa <em>+</em> → <em>Add custom MCP server</em>.
-    Nombre: <code>Uniovi Virtual</code>, URL: pega el enlace, marca que confías en la aplicación y créala.</li>
-  <li><strong>Gemini</strong> (avanzado, en inglés): abre <code>gemini.google.com/devmode</code> → <em>Create new</em> →
-    pega el enlace en <em>MCP Server URL</em> → <em>Next</em> → marca el aviso → <em>Connect</em> → nombre → <em>Connect</em>.
-    En el chat escribe <code>@Uniovi Virtual</code> y, cuando pregunte, responde <em>Permitir siempre</em>.
-    Su plan gratuito se agota rápido.</li>
-</ul>
+<p>Con <strong>Conectar automáticamente</strong> la extensión rellena los campos por ti: tú solo revisas y confirmas.
+En las imágenes el enlace aparece tapado (<code>https://…/mcp/••••••••/••••••••</code>); el tuyo será distinto.</p>
+
+<h3>Claude (gratis, recomendado)</h3>
+<ol>
+  <li>En claude.ai: <em>Personalizar → Conectores</em> → <em>Añadir conector personalizado</em>.
+    <figure><img src="img/claude-1-conectores.png" alt="Página Conectores de Claude con el botón Añadir conector personalizado">
+    <figcaption>Personalizar → Conectores → Añadir conector personalizado.</figcaption></figure></li>
+  <li>Nombre: <code>Uniovi Virtual</code>. URL: pega el enlace. Pulsa <em>Añadir</em>.
+    <figure><img src="img/claude-2-formulario.png" alt="Formulario de Claude con el nombre y el enlace escritos">
+    <figcaption>Con el nombre y el enlace ya escritos, pulsa Añadir.</figcaption></figure></li>
+</ol>
+
+<h3>ChatGPT (también gratis)</h3>
+<ol>
+  <li>Abre <code>chatgpt.com/plugins</code>, pulsa <em>+</em> y elige <em>Add custom MCP server</em>.
+    <figure><img src="img/chatgpt-1-menu.png" alt="Menú + de ChatGPT con la opción Add custom MCP server">
+    <figcaption>«+» → Add custom MCP server.</figcaption></figure></li>
+  <li>Nombre: <code>Uniovi Virtual</code>. URL: pega el enlace. Marca que confías en la aplicación y pulsa <em>Create</em>.
+    <figure><img src="img/chatgpt-2-formulario.png" alt="Formulario de ChatGPT con nombre, enlace y la casilla de confianza">
+    <figcaption>Marca la casilla de confianza y pulsa Create.</figcaption></figure></li>
+</ol>
+
+<h3>Gemini (avanzado, en inglés)</h3>
+<ol>
+  <li>La extensión abre <code>gemini.google.com/devmode</code>, pulsa <em>Create new</em>, pega el enlace en <em>MCP Server URL</em> y pulsa <em>Next</em>.
+    <figure><img src="img/gemini-1-url.png" alt="Gemini: campo MCP Server URL con el enlace y el botón Next">
+    <figcaption>El enlace ya está pegado en MCP Server URL.</figcaption></figure></li>
+  <li>Lee el aviso, <strong>márcalo tú</strong> y pulsa <em>Connect</em>.
+    <figure><img src="img/gemini-2-aviso.png" alt="Gemini: aviso de riesgo con su casilla y el botón Connect">
+    <figcaption>Marca el aviso y pulsa Connect.</figcaption></figure></li>
+  <li>El nombre <code>Uniovi Virtual</code> se escribe solo. Pulsa <em>Connect</em>.
+    <figure><img src="img/gemini-3-nombre.png" alt="Gemini: campo de nombre con Uniovi Virtual y el botón Connect">
+    <figcaption>Con el nombre puesto, pulsa Connect.</figcaption></figure></li>
+  <li>En un chat escribe <code>@Uniovi Virtual</code> y tu pregunta. Cuando pregunte, responde <em>Permitir siempre</em>.</li>
+</ol>
+<p><small>El plan gratuito de Gemini se agota rápido.</small></p>
 <p class="nota"><strong>Importante:</strong> tu IA solo puede leer tus apuntes mientras <strong>Chrome esté abierto en tu ordenador</strong>.
 El enlace es personal: no lo compartas.</p>
 
@@ -93,7 +122,7 @@ buscar dentro de ellos y abrir dos a la vez (por ejemplo, ejercicios y solucione
   <li><strong>La IA dice «Uniovi Virtual no está conectado»:</strong> abre Chrome en tu ordenador y espera unos segundos.</li>
   <li><strong>La IA no encuentra nada:</strong> entra una vez en el Campus Virtual y espera a que termine de sincronizar.
     También puedes pulsar <em>Sincronizar ahora</em> en el icono de la extensión.</li>
-  <li><strong>«Conectar automáticamente» no hizo nada:</strong> usa <em>Copiar enlace</em> y pégalo a mano (paso 3).</li>
+  <li><strong>«Conectar automáticamente» no hizo nada:</strong> usa <em>Copiar enlace</em> y pégalo a mano siguiendo los pasos de tu IA (paso 3).</li>
   <li><strong>Crees que alguien tiene tu enlace:</strong> icono de la extensión → <em>Opciones avanzadas → Cambiar enlace</em>,
     y pega el nuevo en tu IA.</li>
   <li><strong>Otra cosa:</strong> manda una captura a quien te pasó esta página.</li>

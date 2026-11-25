@@ -13,7 +13,7 @@ test profile at your real campus data except in the checks below that are about 
 - [ ] Deploy the relay: follow [relay/DESPLIEGUE.md](../relay/DESPLIEGUE.md) (Cloudflare account, `npx wrangler login`, `npx wrangler deploy`). `curl https://<relay>/` answers `Uniovi Virtual relay`.
 - [ ] Put that URL in `RELAY_URL` in `shared/relay.ts` (no trailing slash). Never change it afterwards: every student's pasted link depends on it.
 - [ ] Make the GitHub repository **public** (Settings → General → Danger Zone → Change visibility). Pages and the unauthenticated releases API (the update check) need it.
-- [ ] Enable GitHub Pages: Settings → Pages → Source "Deploy from a branch", branch `master`, folder `/docs`. After a minute, <https://iyangarcia.github.io/uniovi-virtual-extension/> shows the download page with its pictures.
+- [ ] Enable GitHub Pages: Settings → Pages → Source "Deploy from a branch", branch `gh-pages`, folder `/ (root)`. That branch holds only a manual copy of `docs/index.html` and `docs/img/` (see "Publicar la guía" below). After a minute, <https://iyangarcia.github.io/uniovi-virtual-extension/> shows the download page with its pictures.
 - [ ] Push the installer backup tag: `git push origin v0.1.0-instalador`. Optionally create a release on that tag and attach the old `UnioviVirtual-Setup-0.1.0.exe` (rebuild it with `git checkout v0.1.0-instalador && npm ci && npm run package` if you no longer have it; mark it as not latest).
 
 **Each version:**
@@ -21,6 +21,23 @@ test profile at your real campus data except in the checks below that are about 
 - [ ] `npm run typecheck && npm test && npm run build && npm run package`. This writes `release/uniovi-virtual-<version>.zip` and `release/uniovi-virtual.zip` (same bytes). It refuses while `RELAY_URL` is still the `example.workers.dev` placeholder (deploy the relay first). For a local test zip only: `ALLOW_PLACEHOLDER_RELAY=1 npm run package` (never publish that zip).
 - [ ] Create a GitHub Release with tag `v<version>` and attach **both** zips. It must be marked *latest*: the download button points at `releases/latest/download/uniovi-virtual.zip`, and the extension's daily update check reads `releases/latest`.
 - [ ] Click **Descargar** on the Pages site: the new zip downloads.
+
+### Publicar la guía
+
+Pages does not follow `master`: after changing `docs/index.html` or `docs/img/`, copy them to `gh-pages` by hand (Git Bash, from the repo root):
+
+```sh
+git fetch origin
+test "$(git rev-parse gh-pages)" = "$(git rev-parse origin/gh-pages)"
+git worktree add .claude/worktrees/gh-pages gh-pages && cd .claude/worktrees/gh-pages
+cp ../../../docs/index.html . && rm -rf img && cp -r ../../../docs/img img
+git add -A index.html img && git status --porcelain   # only index.html / img/*
+git commit -m "Guide: ..."
+git -c push.default=nothing push origin gh-pages:gh-pages   # pushes only gh-pages, never master
+cd ../../.. && git worktree remove .claude/worktrees/gh-pages
+```
+
+If the `test` line fails, local `gh-pages` and `origin/gh-pages` differ: find out why before publishing.
 
 ## 1. A fresh student (the real test)
 
@@ -35,7 +52,7 @@ On a Windows PC that has never had the extension, on **campus Wi-Fi** (eduroam /
 
 ## 2. Each AI answers
 
-For **claude.ai** (free plan), **ChatGPT** (Plus) and **Gemini** (if the option exists for a Spanish account; otherwise note plan/country and that it was missing):
+For **claude.ai** (free plan), **ChatGPT** (free plan works) and **Gemini** (Developer Mode, `gemini.google.com/devmode`; note the plan):
 
 - [ ] The connector is added with the student's link, no authentication, and lists about 11 tools.
 - [ ] "¿Qué exámenes tengo esta semana?" Matches the campus calendar and announcements. Forum dates are quoted with a link. Record client, plan, the tool calls and the result.
@@ -50,8 +67,13 @@ For **claude.ai** (free plan), **ChatGPT** (Plus) and **Gemini** (if the option 
 On the real sites, logged in:
 
 - [ ] claude.ai: **Conectar automáticamente** asks for the claude.ai permission only at click time, opens the connector page and fills name + URL. Only the AI's own confirm button is left. Confirm → it works in a chat.
-- [ ] chatgpt.com: the same, on a Plus account.
-- [ ] Gemini: the card says it is probably not available; if a form exists, try it.
+- [ ] chatgpt.com: the same, on a free account (the student ticks the trust checkbox and presses Create).
+- [ ] Gemini (Developer Mode):
+  - [ ] Auto-fill opens `gemini.google.com/devmode`, clicks **Create new**, fills **MCP Server URL** and presses **Next**.
+  - [ ] The risk checkbox is left unticked for the student.
+  - [ ] After the student's **Connect**, the name «Uniovi Virtual» is filled automatically (description left empty).
+  - [ ] The extension never presses the final **Connect**.
+  - [ ] Then `@Uniovi Virtual` works in a normal chat (answer «Permitir siempre»).
 - [ ] After each fill (done or not), `chrome://extensions` → Uniovi Virtual → Detalles → Acceso a sitios no lists the AI site any more (the permission is given back at once).
 - [ ] On a page that also shows another form or dialog with an "Add" / "Create" button, auto-fill never presses it.
 - [ ] Deny the permission, or break a selector on purpose (edit the selector file, rebuild): it falls back to Copiar with a note.

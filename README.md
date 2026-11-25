@@ -15,7 +15,7 @@ Download page, with pictures: **<https://iyangarcia.github.io/uniovi-virtual-ext
 
 Full guide in Spanish (connecting each AI, Mis apuntes, updates, privacy, troubleshooting): **[docs/USO-CON-IA-WEB.md](docs/USO-CON-IA-WEB.md)**.
 
-Which AI: Claude (claude.ai, free plan: 1 custom connector), ChatGPT (Plus or higher), Gemini (probably not available in Spain yet). The AI can only read your files while Chrome is open.
+Which AI: Claude (claude.ai, free plan: 1 custom connector), ChatGPT (free plan too), Gemini (advanced: Developer Mode, in English). The AI can only read your files while Chrome is open.
 
 ## How it works
 

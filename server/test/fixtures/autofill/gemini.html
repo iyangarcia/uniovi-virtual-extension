@@ -1,27 +1,110 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>Gemini apps (fixture)</title></head>
+<html lang="en"><head><meta charset="utf-8"><title>Gemini developer mode (fixture)</title>
+<style>[role="dialog"] { position: fixed; top: 150px; left: 0; right: 0; margin: 0 auto; width: 560px; padding: 20px; border: 1px solid #999; background: #fff; }</style>
+</head>
 <body>
-<!-- Imitates a Gemini "Connected apps" page in Spanish: a direct "Añadir una aplicación personalizada"
-     button, and fields labelled through aria-labelledby (Material style). -->
+<!-- Imitates gemini.google.com/devmode (2026, in English; DOM recorded live on 2026-11-25). One
+     dialog (Angular Material's mat-dialog-container[role=dialog]) stays open and swaps its content per
+     screen. All buttons are plain <button> without a type, as on the real site.
+     Screen 0 (opens by itself): «Search apps» text field, Cancel, «Create new».
+     Screen 1: a <form> with an input type=url name=url labelled «MCP server URL» (aria-labelledby),
+       «Additional settings» (role=button), Cancel and Next, enabled only by an input event.
+     Screen 2: no form; a risk checkbox and Connect, enabled once it is ticked.
+     Screen 3, 2 s after a real (trusted) Connect: «App name» (aria-label only), «See all 11», Cancel,
+       and the final Connect, enabled once a name is typed.
+     Auto-fill may press «Create new» and Next (once, only the dialog's); the checkbox and both
+     Connects are the student's. A page-level "Next" outside the dialog is a decoy. -->
 <div id="app"></div>
 <script src="common.js"></script>
 <script>
+window.__advanceClicks = 0;
+window.__decoyClicks = 0;
+let d;
+const $ = (id) => d.querySelector("#" + id);
+
+function screen(html) {
+  d.innerHTML = `<button id="close" aria-label="Close">×</button>` + html;
+  $("close").onclick = () => d.remove();
+  const cancel = $("cancel");
+  if (cancel) cancel.onclick = () => d.remove();
+}
+
 later(700, () => {
   app.innerHTML = `
-    <h1>Aplicaciones conectadas</h1>
-    <div role="button" tabindex="0" id="add"><span class="icon">＋</span><span>Añadir una aplicación personalizada</span></div>`;
-  add.onclick = () => later(300, () => {
-    const d = document.createElement("dialog");
-    d.innerHTML = `
-      <form method="dialog">
-        <div><span id="lu">URL del servidor MCP</span><input aria-labelledby="lu" data-field="url"></div>
-        <div><span id="ln">Nombre de la aplicación</span><input aria-labelledby="ln" data-field="name"></div>
-        <button value="cancel">Cancelar</button><button data-confirm disabled value="ok">Añadir</button>
-      </form>`;
+    <h1>Developer mode</h1>
+    <p>Connect MCP servers to Gemini.</p>
+    <button id="decoyNext">Next</button>`;
+  decoyNext.onclick = () => window.__decoyClicks++;
+  later(300, () => {
+    d = document.createElement("div");
+    d.setAttribute("role", "dialog");
+    d.setAttribute("aria-modal", "true");
     document.body.append(d);
-    d.show();
-    bindForm(d);
+    screen0();
   });
 });
+
+function screen0() {
+  screen(`
+    <h2>Apps</h2>
+    <input type="text" aria-label="Search apps" placeholder="Search apps">
+    <ul><li>No apps yet</li></ul>
+    <div class="actions"><button id="cancel">Cancel</button><button id="create">Create new</button></div>`);
+  $("create").onclick = () => later(300, screen1);
+}
+
+function screen1() {
+  screen(`
+    <h2>Connect an app</h2>
+    <form id="f1">
+      <div class="mat-form-field"><label id="lu">MCP server URL</label>
+        <input type="url" name="url" placeholder="https://your-app-link.com/mcp" aria-labelledby="lu"></div>
+      <div role="button" tabindex="0">Additional settings <span>Show more</span></div>
+      <div class="actions"><button id="cancel">Cancel</button><button id="next" disabled>Next</button></div>
+    </form>`);
+  const url = d.querySelector("input[name=url]");
+  url.addEventListener("input", () => {
+    window.__state.url = url.value;
+    $("next").disabled = !url.value;
+  });
+  $("f1").addEventListener("submit", (e) => e.preventDefault());
+  $("next").addEventListener("click", (e) => {
+    e.preventDefault();
+    window.__advanceClicks++;
+    later(200, screen2);
+  });
+}
+
+function screen2() {
+  screen(`
+    <h2>Before you connect</h2>
+    <div class="mat-dialog-content">
+      <label class="mat-checkbox"><input type="checkbox" id="risk"> I understand and accept the security and privacy risks of connecting this app</label>
+    </div>
+    <div class="actions"><button id="cancel">Cancel</button><button id="connect1" disabled>Connect</button></div>`);
+  $("risk").addEventListener("change", () => ($("connect1").disabled = !$("risk").checked));
+  guardConfirm($("connect1"));
+  $("connect1").addEventListener("click", (e) => {
+    if (!e.isTrusted) return;
+    d.innerHTML = "<p>Checking the server…</p>";
+    later(2000, screen3);
+  });
+}
+
+function screen3() {
+  screen(`
+    <h2>Name your app</h2>
+    <div class="mat-dialog-content">
+      <div class="mat-form-field"><input type="text" aria-label="App name" data-field="name"></div>
+      <p>Tools <button id="seeAll">See all 11</button></p>
+    </div>
+    <div class="actions"><button id="cancel">Cancel</button><button id="connect2" disabled>Connect</button></div>`);
+  const name = d.querySelector("[data-field=name]");
+  name.addEventListener("input", () => {
+    window.__state.name = name.value;
+    $("connect2").disabled = !name.value;
+  });
+  guardConfirm($("connect2"));
+}
 </script>
 </body></html>

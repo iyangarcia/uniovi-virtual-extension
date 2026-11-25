@@ -99,6 +99,9 @@ test("update from a GitHub release body", () => {
   assert.equal(pendingUpdate({ version: "9.0.0", url: "javascript:alert(1)" }, "0.2.0"), undefined);
 });
 
+// Buttons the auto-fill must never press, whether as a step or as a wizard's advance button.
+const CONFIRM = /^=?(add|anadir|añadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir)$/;
+
 test("auto-fill specs: https origins declared as optional host permissions, start page on that origin", () => {
   const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as {
     permissions: string[];
@@ -113,9 +116,18 @@ test("auto-fill specs: https origins declared as optional host permissions, star
     assert.ok(spec.steps.length > 0 && spec.urlField.length > 0 && spec.nameField.length > 0);
     // Specs travel to the page as executeScript args: they must survive JSON.
     assert.deepEqual(JSON.parse(JSON.stringify(spec)), spec);
-    // Never a pattern that could be the AI's own final confirm button.
-    for (const p of spec.steps.flatMap((s) => s.texts)) assert.doesNotMatch(p, /^=(add|anadir|añadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar)$/);
+    // Never a pattern that could be the AI's own final confirm button: not as a step, not as an
+    // advance ("Next") button, exact or substring.
+    for (const p of [...spec.steps.flatMap((s) => s.texts), ...(spec.advance ?? [])]) assert.doesNotMatch(p, CONFIRM, `${spec.id}: ${p}`);
+    // Advance buttons are exact matches only, and the name watcher has a sane lifetime.
+    for (const p of spec.advance ?? []) assert.ok(p.startsWith("=") && p.length > 1, `${spec.id}: advance "${p}" must be exact`);
+    // A step allowed inside a dialog with fields must have exact texts (only those are used there).
+    for (const s of spec.steps) if (s.inDialog) assert.ok(s.texts.some((p) => p.startsWith("=")), `${spec.id}: inDialog step needs "=" texts`);
+    assert.ok(spec.nameLaterMs === undefined || (spec.nameLaterMs >= 30_000 && spec.nameLaterMs <= 300_000), `${spec.id}: nameLaterMs`);
   }
+  // Only Gemini's wizard needs the multi-screen extras; Claude and ChatGPT keep the one-screen flow.
+  assert.ok(gemini.advance?.length && gemini.nameLaterMs && gemini.confirmLabel && gemini.steps.some((s) => s.inDialog));
+  for (const spec of [claude, chatgpt]) assert.ok(spec.advance === undefined && spec.nameLaterMs === undefined && !spec.steps.some((s) => s.inDialog), spec.id);
 });
 
 test("root package.json carries the extension's name and version", () => {

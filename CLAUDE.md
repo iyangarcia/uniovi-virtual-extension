@@ -16,6 +16,7 @@ npm run package      # clean build + release/uniovi-virtual-<version>.zip and re
 npm run mcp          # dev: MCP over stdio + HTTP bridge (what Claude Code launches via .mcp.json)
 npm run serve        # dev: HTTP ingest bridge only (sync while Claude is closed)
 cd relay && npm install && npx wrangler dev   # local relay on http://127.0.0.1:8787, no account needed
+cd scripts/shots && npm install && node verify-autofill.mjs   # auto-fill against look-alike pages (Chrome for Testing)
 ```
 
 `typecheck` needs `npm install` inside `relay/` first. Deploying the relay: `relay/DESPLIEGUE.md`. Releasing: `docs/PRUEBAS-MANUALES.md` section 0.

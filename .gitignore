@@ -8,3 +8,4 @@ server/dist/
 .claude/settings.local.json
 .claude/worktrees/
 release/
+scripts/shots/out/

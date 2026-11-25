@@ -9,12 +9,60 @@ import type { FillArgs, FillResult } from "./types.ts";
  *    until a URL input is visible.
  * 2. Fills URL and name the way a person typing would (native value setter + input/change events,
  *    so React/Angular forms notice).
- * 3. Leaves the AI's own confirm button alone, and shows a small note on the page saying what to do.
+ * 3. Multi-screen forms only (spec.advance / spec.nameLaterMs, Gemini): presses the wizard's "Next"
+ *    inside the URL field's own dialog, then leaves a watcher running that writes the name once its
+ *    field appears (after the student's own confirm). Risk notices and checkboxes are never touched.
+ * 4. Leaves the AI's own confirm button alone, and shows a small note on the page saying what to do.
  */
 export async function fillConnector(args: FillArgs): Promise<FillResult> {
   const trace: string[] = [];
   const result: FillResult = { ok: false, url: false, name: false, trace };
   const BANNER_ID = "uniovi-virtual-autofill-note";
+  const confirmWord = args.spec.confirmLabel ? `«${args.spec.confirmLabel}»` : "el botón";
+  const later = `Cuando aparezca el nombre lo escribiré yo (si no, escribe «${args.name}»).`;
+  const NOTES = {
+    filled: "he rellenado el nombre y el enlace. Revísalo y pulsa tú el botón para añadirlo.",
+    pasted: "he pegado el enlace. Escribe «Uniovi Virtual» como nombre y pulsa tú el botón para añadirlo.",
+    advanced: `he pegado el enlace y pulsado «Next». Marca tú el aviso y pulsa ${confirmWord}. ${later}`,
+    noAdvance: `he pegado el enlace. Pulsa tú «Next», marca el aviso y pulsa ${confirmWord}. ${later}`,
+    named: `he escrito el nombre «${args.name}». Revísalo y pulsa tú ${confirmWord} para terminar.`,
+    fail: "No pude rellenarlo solo: el enlace está copiado, pégalo en el campo URL (Ctrl+V).",
+  };
+  type NoteKind = keyof typeof NOTES;
+  let removeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The small note on the page, so she knows what to do next. `sticky`: no 30 s auto-removal. */
+  const showNote = (kind: NoteKind, sticky = false) => {
+    try {
+      clearTimeout(removeTimer);
+      document.getElementById(BANNER_ID)?.remove();
+      // At the top while a dialog is open, so it doesn't cover the dialog's buttons.
+      const dialogOpen = [...document.querySelectorAll("[role='dialog'], [role='alertdialog'], dialog[open]")].some((d) => d.getClientRects().length > 0);
+      const note = document.createElement("div");
+      note.id = BANNER_ID;
+      note.setAttribute("role", "status");
+      note.style.cssText =
+        `position:fixed;z-index:2147483647;left:50%;${dialogOpen ? "top:16px" : "bottom:24px"};transform:translateX(-50%);max-width:min(560px,calc(100vw - 32px));` +
+        "padding:14px 44px 14px 18px;border-radius:12px;font:16px/1.4 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.25);" +
+        (kind !== "fail" ? "background:#1b5e20;color:#fff;" : "background:#fff3cd;color:#3d2c00;border:1px solid #e0b000;");
+      const title = document.createElement("strong");
+      title.textContent = "Uniovi Virtual: ";
+      const text = document.createElement("span");
+      text.textContent = NOTES[kind];
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "×";
+      close.setAttribute("aria-label", "Cerrar");
+      close.style.cssText = "position:absolute;top:6px;right:8px;border:0;background:none;color:inherit;font-size:22px;cursor:pointer;";
+      close.addEventListener("click", () => note.remove());
+      note.append(title, text, close);
+      document.body.append(note);
+      if (!sticky) removeTimer = setTimeout(() => note.remove(), 30_000);
+    } catch {
+      // The note is a nicety; never fail because of it.
+    }
+  };
+  let noteKind: NoteKind = "fail";
+  let watching = false;
   try {
     const { spec, name, url, timeoutMs } = args;
     const deadline = Date.now() + timeoutMs;
@@ -47,10 +95,12 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       !!el.closest("form") ||
       !!el.closest("[role='dialog'], [role='alertdialog'], dialog")?.querySelector(FIELD) ||
       !!el.closest(CARD)?.querySelector(FIELD);
-    const findClickable = (patterns: string[]): HTMLElement | undefined => {
+    // Step.inDialog: a dialog with a field is allowed, everything else unsafe() checks still applies.
+    const unsafeInDialog = (el: HTMLElement) => /^submit$/i.test(el.getAttribute("type") ?? "") || !!el.closest("form") || !!el.closest(CARD)?.querySelector(FIELD);
+    const findClickable = (patterns: string[], inDialog = false): HTMLElement | undefined => {
       let best: { el: HTMLElement; len: number } | undefined;
       for (const el of document.querySelectorAll<HTMLElement>(CLICKABLE)) {
-        if (!visible(el) || unsafe(el)) continue;
+        if (!visible(el) || (inDialog ? unsafeInDialog(el) : unsafe(el))) continue;
         const texts = [norm(el.innerText || el.textContent), norm(el.getAttribute("aria-label")), norm(el.getAttribute("title"))];
         const hit = texts.find((t) => matches(t, patterns));
         // The shortest matching text is the most specific element (a button, not the card around it).
@@ -107,7 +157,9 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       let openerTried = false;
       let clicked = false;
       while (Date.now() < deadline && !(urlInput = findUrlInput())) {
-        const target = findClickable(step.texts);
+        // Only exact texts may reach into a dialog that has a field (Gemini's «Create new»).
+        const exact = step.inDialog ? step.texts.filter((p) => p.startsWith("=")) : [];
+        const target = findClickable(step.texts) ?? (exact.length ? findClickable(exact, true) : undefined);
         if (target) {
           trace.push(`step ${i}: click "${norm(target.innerText || target.getAttribute("aria-label"))}"`);
           target.click();
@@ -147,40 +199,74 @@ export async function fillConnector(args: FillArgs): Promise<FillResult> {
       trace.push(`filled url=${result.url} name=${result.name}`);
     } else trace.push("url field not found");
     result.ok = result.url;
+    noteKind = !result.ok ? "fail" : result.name ? "filled" : "pasted";
+
+    // ---- 3a. multi-screen form: press the wizard's own forward button ("Next"), exact text only,
+    // inside the URL field's dialog (or form). The one click allowed on a submit button: these words
+    // never confirm anything (ux.test.ts). Checkboxes (the risk notice) are never touched.
+    const advance = (spec.advance ?? []).filter((p) => p.startsWith("="));
+    if (urlInput && result.url && advance.length) {
+      const field = findUrlInput() ?? urlInput;
+      const root = field.closest("[role='dialog'], [role='alertdialog'], dialog") ?? field.closest("form");
+      const findAdvance = () => {
+        for (const el of root?.querySelectorAll<HTMLElement>("button, [role='button']") ?? []) {
+          if (!visible(el) || el.getAttribute("aria-disabled") === "true") continue;
+          const texts = [norm(el.innerText || el.textContent), norm(el.getAttribute("aria-label")), norm(el.getAttribute("title"))];
+          if (texts.some((t) => matches(t, advance))) return el;
+        }
+        return undefined;
+      };
+      const stopAt = Date.now() + 3000;
+      while (root && Date.now() < stopAt) {
+        const next = findAdvance();
+        if (next) {
+          trace.push(`advance: click "${norm(next.innerText || next.getAttribute("aria-label"))}"`);
+          next.click();
+          result.advanced = true;
+          break;
+        }
+        await sleep(200);
+      }
+      if (!result.advanced) trace.push(root ? "advance: not found" : "advance: no dialog or form");
+      noteKind = result.advanced ? "advanced" : "noAdvance";
+    }
+
+    // ---- 3b. the name field comes only after her own confirm: a detached watcher (not awaited, so
+    // autoConnect gets its answer and gives the host permission back) writes the name once, if the
+    // field is empty. It never clicks, and stops when time is up, the page changes or she typed a name.
+    if (urlInput && result.url && !result.name && spec.nameLaterMs) {
+      result.nameLater = true;
+      watching = true;
+      const first = urlInput;
+      const origin = location.origin;
+      const stopAt = Date.now() + spec.nameLaterMs;
+      const watcher = setInterval(() => {
+        try {
+          if (location.origin !== origin) return void clearInterval(watcher);
+          if (Date.now() > stopAt) {
+            clearInterval(watcher);
+            return showNote(noteKind);
+          }
+          const field = inputs().find(
+            (el) => el !== first && !(el instanceof HTMLInputElement && el.type === "url") && el.value !== url && matches(describe(el), spec.nameField),
+          );
+          if (!field) return;
+          clearInterval(watcher);
+          if (field.value.trim()) return showNote(noteKind);
+          if (setValue(field, name)) showNote("named");
+          else showNote(noteKind);
+        } catch {
+          clearInterval(watcher);
+        }
+      }, 500);
+    }
   } catch (err) {
     trace.push(`error: ${err instanceof Error ? err.message : String(err)}`);
     result.ok = false;
+    noteKind = "fail";
   }
 
-  // ---- 3. a short note on the page, so she knows what to do next
-  try {
-    document.getElementById(BANNER_ID)?.remove();
-    const note = document.createElement("div");
-    note.id = BANNER_ID;
-    note.setAttribute("role", "status");
-    note.style.cssText =
-      "position:fixed;z-index:2147483647;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100vw - 32px));" +
-      "padding:14px 44px 14px 18px;border-radius:12px;font:16px/1.4 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.25);" +
-      (result.ok ? "background:#1b5e20;color:#fff;" : "background:#fff3cd;color:#3d2c00;border:1px solid #e0b000;");
-    const title = document.createElement("strong");
-    title.textContent = "Uniovi Virtual: ";
-    const text = document.createElement("span");
-    text.textContent = result.ok
-      ? result.name
-        ? "he rellenado el nombre y el enlace. Revísalo y pulsa tú el botón para añadirlo."
-        : "he pegado el enlace. Escribe «Uniovi Virtual» como nombre y pulsa tú el botón para añadirlo."
-      : "No pude rellenarlo solo: el enlace está copiado, pégalo en el campo URL (Ctrl+V).";
-    const close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "×";
-    close.setAttribute("aria-label", "Cerrar");
-    close.style.cssText = "position:absolute;top:6px;right:8px;border:0;background:none;color:inherit;font-size:22px;cursor:pointer;";
-    close.addEventListener("click", () => note.remove());
-    note.append(title, text, close);
-    document.body.append(note);
-    setTimeout(() => note.remove(), 30_000);
-  } catch {
-    // The note is a nicety; never fail because of it.
-  }
+  // ---- 4. the note; it stays while the watcher runs
+  showNote(noteKind, watching);
   return result;
 }

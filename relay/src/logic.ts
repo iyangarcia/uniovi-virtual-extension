@@ -2,6 +2,7 @@
 // runner can import it directly (relay/test/logic.test.ts). The Worker and Durable Object live in index.ts.
 
 import {
+  AGENT_PING_MS,
   ID_RE,
   MAX_BODY_BYTES,
   MAX_RESPONSE_BYTES,
@@ -201,6 +202,18 @@ export function rateAllow(w: RateWindow, now: number, limit = RATE_LIMIT_PER_MIN
   if (w.count >= limit) return false;
   w.count++;
   return true;
+}
+
+/**
+ * An agent socket with no ping for this long is treated as dead (two missed pings plus margin). This
+ * happens after sleep or a network change, when the TCP connection dies without a close. Without the
+ * check, the relay would send the request into the void and the AI would wait the full timeout.
+ */
+export const STALE_AFTER_MS = AGENT_PING_MS * 2 + 5_000;
+
+/** True if the socket's last sign of life (`lastSeen`, ms epoch: welcome or last auto-answered ping) is too old. */
+export function isStale(lastSeen: number, now: number): boolean {
+  return now - lastSeen > STALE_AFTER_MS;
 }
 
 /** The request timeout: the contract value, or a lower one from a test-only var (never higher, never below 1 s). */

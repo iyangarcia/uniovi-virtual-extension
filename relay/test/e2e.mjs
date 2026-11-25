@@ -77,6 +77,17 @@ async function main() {
     );
   }
 
+  // A second agent that never pings, started now and checked at the end: its socket goes stale (like after sleep).
+  const silentId = b64url(16), silentToken = b64url(16);
+  const silent = startNodeAgent({ wsBase: WS, id: silentId, secret: b64url(32), agent: "silent", pingMs: 3_600_000,
+    handle: async () => new Response("ok", { headers: { "content-type": "text/plain" } }) });
+  const silentAt = Date.now();
+  check("silent agent hello → welcome", (await silent.ready).type === "welcome");
+  {
+    const r = await post(`${RELAY}/mcp/${silentId}/${silentToken}`, "hi");
+    check("fresh silent agent still served", r.status === 200, `status ${r.status}`);
+  }
+
   // Agent connects.
   let agent = startNodeAgent({ wsBase: WS, id, secret, handle, agent: "e2e" });
   const hello = await agent.ready;
@@ -282,6 +293,17 @@ async function main() {
     const s = ((Date.now() - t0) / 1000).toFixed(1);
     check("no hello → rejected bad-hello after ~10 s", msg && JSON.parse(msg).reason === "bad-hello" && Date.now() - t0 >= 9_500, `${msg} after ${s} s`);
     ws.close();
+  }
+
+  // Stale socket (no ping for 2 × 20 s + 5 s) → 503 at once, and the relay closes it, instead of a 60 s wait.
+  {
+    const wait = silentAt + 46_000 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const t0 = Date.now();
+    const r = await post(`${RELAY}/mcp/${silentId}/${silentToken}`, "hi");
+    const ms = Date.now() - t0;
+    const closed = await Promise.race([silent.closed, new Promise((res) => setTimeout(() => res(null), 3000))]);
+    check("stale agent → 503 at once, socket closed", r.status === 503 && ms < 2500 && closed?.reason === "stale", `status ${r.status} after ${ms} ms, ${JSON.stringify(closed)}`);
   }
 }
 

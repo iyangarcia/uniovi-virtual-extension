@@ -26,6 +26,8 @@
 // Forwarding: for each HTTP request on /mcp/<id>/<token>[/...] the Durable Object sends a
 // RelayRequest and waits up to REQUEST_TIMEOUT_MS for the RelayResponse with the same rid.
 //  - No agent connected → 503 with NOT_CONNECTED_BODY (a JSON-RPC error the AI shows the student).
+//    So is a stale socket (no PING for 2 × AGENT_PING_MS + 5 s, e.g. after sleep): the relay closes it
+//    ("stale") and answers 503 at once instead of waiting the full timeout.
 //  - Timeout → 504. Request body over MAX_BODY_BYTES → 413. More than MAX_INFLIGHT pending → 503.
 //  - The relay does NOT check the token: it forwards `path` (everything after /mcp/<id>) and the
 //    agent answers 404 for a wrong token. That keeps the relay free of per-student secrets besides

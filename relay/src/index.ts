@@ -20,6 +20,7 @@ import {
   bytesToBase64,
   contentLengthTooLarge,
   decodeResponseBody,
+  isStale,
   parseHello,
   parseResponse,
   rateAllow,
@@ -206,12 +207,29 @@ export class AgentRoom extends DurableObject<Env> {
     p.resolve(agentHttpResponse(res, body) ?? text(502, "Bad response from the extension"));
   }
 
+  /**
+   * Closes `ws` and fails its pending requests if it has gone silent (no auto-answered ping lately).
+   * The extension notices too (missed pongs) and reconnects; until then the AI gets the fast 503.
+   */
+  private dead(ws: WebSocket): boolean {
+    const lastPing = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0;
+    if (!isStale(Math.max(lastPing, this.attachment(ws).at), Date.now())) return false;
+    try {
+      ws.close(1000, "stale");
+    } catch {
+      // already closed
+    }
+    this.failPending(this.attachment(ws).sid);
+    return true;
+  }
+
   // ---- HTTP forwarding ----
 
   private async forward(request: Request, path: string): Promise<Response> {
     if (!rateAllow(this.rate, Date.now())) return text(429, "Too many requests");
     const ws = this.agent();
     if (!ws) return notConnected();
+    if (this.dead(ws)) return notConnected();
     if (this.pending.size >= MAX_INFLIGHT) return text(503, "Too many requests in flight");
     if (contentLengthTooLarge(request.headers.get("content-length"))) return text(413, "Request body too large");
     const body = await readCapped(request.body);

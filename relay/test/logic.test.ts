@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_BODY_BYTES, MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS } from "../../shared/relay.ts";
+import { AGENT_PING_MS, MAX_BODY_BYTES, MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS } from "../../shared/relay.ts";
 import {
   RATE_LIMIT_PER_MINUTE,
+  STALE_AFTER_MS,
+  isStale,
   agentHttpResponse,
   base64ToBytes,
   bytesToBase64,
@@ -163,6 +165,13 @@ test("rateAllow: fixed window per minute", () => {
   assert.equal(rateAllow(w, t0 + 59_999), false);
   assert.equal(rateAllow(w, t0 + 60_000), true);
   assert.equal(w.count, 1);
+});
+
+test("isStale: a socket is dead after two missed pings plus margin, not before", () => {
+  assert.equal(STALE_AFTER_MS, AGENT_PING_MS * 2 + 5_000);
+  assert.equal(isStale(1_000, 1_000 + AGENT_PING_MS), false);
+  assert.equal(isStale(1_000, 1_000 + STALE_AFTER_MS), false);
+  assert.equal(isStale(1_000, 1_000 + STALE_AFTER_MS + 1), true);
 });
 
 test("requestTimeout only lowers the contract value", () => {

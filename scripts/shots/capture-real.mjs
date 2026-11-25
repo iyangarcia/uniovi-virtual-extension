@@ -18,7 +18,7 @@
 import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { args, auditIdentity, highlight, identityFromEnv, log, MASKED_LINK, sleep } from "./lib.mjs";
+import { args, auditIdentity, clearHighlights, highlight, identityFromEnv, log, MASKED_LINK, sleep } from "./lib.mjs";
 
 const ORIGINS = { claude: "https://claude.ai", chatgpt: "https://chatgpt.com", gemini: "https://gemini.google.com" };
 const CONFIRM = /^(add|anadir|agregar|create|crear|save|guardar|confirm|confirmar|connect|conectar|done|listo|finish|finalizar|submit|enviar|ok|aceptar|allow|permitir|allow always|permitir siempre)$/;
@@ -43,6 +43,7 @@ try {
   const page = (await browser.pages()).find((p) => p.url().startsWith(ORIGINS[site]));
   if (!page) throw new Error(`no open tab on ${ORIGINS[site]}`);
   await page.bringToFront();
+  await clearHighlights(page); // overlays left by an earlier run
 
   if (typeof opts.hide === "string") await page.$$eval(opts.hide, (els) => els.forEach((e) => e.style.setProperty("display", "none", "important")));
 

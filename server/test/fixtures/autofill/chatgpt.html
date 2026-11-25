@@ -15,7 +15,8 @@ later(1200, () => {
     <div id="menu" role="menu" hidden><div role="menuitem" tabindex="0" id="mcpItem">Add custom MCP server</div></div>`;
   // A past chat in the sidebar whose title matches the step text (seen live): never opened.
   pastChat.onclick = (e) => { e.preventDefault(); window.__decoyClicks = (window.__decoyClicks || 0) + 1; };
-  plus.onclick = () => later(200, () => (menu.hidden = false));
+  // Like Radix on the real site: the menu opens on pointerdown; a bare el.click() does nothing.
+  plus.onpointerdown = () => later(200, () => (menu.hidden = false));
   mcpItem.onclick = () => {
     menu.hidden = true;
     const d = document.createElement("div");

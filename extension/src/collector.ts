@@ -1,4 +1,5 @@
 import type { Assignment, CalendarEvent, Course, ForumPost, Resource, Snapshot } from "../../shared/types.ts";
+import { activityTextPath, elementText, linkedFiles, linkTarget, mainRegion, textFilename, wantsText } from "./activity.ts";
 import { htmlToText, MoodleClient, MoodleError } from "./moodle.ts";
 
 export interface CollectOptions {
@@ -7,7 +8,11 @@ export interface CollectOptions {
   /** Fetch replies for discussions active within this many days. */
   replyWindowDays: number;
   onProgress: (msg: string) => void;
+  /** Full text of an activity or course page (stored as a text file once the snapshot is saved). */
+  onText?: (r: Resource & { filename: string }, text: string) => void;
 }
+
+type OnText = NonNullable<CollectOptions["onText"]>;
 
 interface ForumRef {
   courseId: number;
@@ -50,7 +55,7 @@ export async function collect(client: MoodleClient, opts: CollectOptions): Promi
   const forums: ForumRef[] = [];
   let done = 0;
   await mapLimit(courses, 3, async (course) => {
-    const r = await getCourseContents(client, course, warn);
+    const r = await getCourseContents(client, course, warn, opts.onText ?? (() => undefined));
     resources.push(...r.resources);
     forums.push(...r.forums);
     opts.onProgress(`Course contents ${++done}/${courses.length}`);
@@ -136,8 +141,10 @@ async function getCourseContents(
   client: MoodleClient,
   course: Course,
   warn: Warn,
+  onText: OnText,
 ): Promise<{ resources: Resource[]; forums: ForumRef[] }> {
   const resources: Resource[] = [];
+  const activities: Resource[] = [];
   const forums: ForumRef[] = [];
   try {
     const sections = await client.call<Array<{ name: string; modules: WsModule[] }>>("core_course_get_contents", {
@@ -148,6 +155,10 @@ async function getCourseContents(
       for (const mod of section.modules) {
         if (mod.modname === "forum") {
           forums.push({ courseId: course.id, instance: mod.instance, name: mod.name });
+          continue;
+        }
+        if (wantsText(mod.modname)) {
+          activities.push(activityResource(client, course, mod.id, mod.modname, mod.name, htmlToText(section.name)));
           continue;
         }
         for (const f of mod.contents ?? []) {
@@ -169,6 +180,7 @@ async function getCourseContents(
         }
       }
     }
+    resources.push(...(await readActivities(client, course, activities, warn, onText)));
     return { resources, forums };
   } catch (err) {
     warn(`contents ${course.shortname} (WS)`, err);
@@ -194,6 +206,10 @@ async function getCourseContents(
         resources.push(...(await scrapeFolder(client, course, cmid, name, section, warn)));
         continue;
       }
+      if (wantsText(modname)) {
+        activities.push(activityResource(client, course, cmid, modname, name, section));
+        continue;
+      }
       resources.push({
         key: modname === "resource" ? `${cmid}:/` : `${cmid}:link`,
         cmid,
@@ -208,7 +224,17 @@ async function getCourseContents(
   } catch (err) {
     warn(`resources ${course.shortname} (HTML)`, err);
   }
-  resources.push(...(await scrapeSectionFiles(client, course, warn)));
+  const pages = await scrapeCoursePages(client, course, warn, onText);
+  resources.push(...pages.files);
+  // resources.php lists only resource-type modules (files, folders, pages, links, books): quizzes,
+  // assignments, lessons... are found on the section pages.
+  const known = new Set(activities.map((a) => a.cmid));
+  for (const a of pages.activities) {
+    if (known.has(a.cmid) || !wantsText(a.modname)) continue;
+    known.add(a.cmid);
+    activities.push(a);
+  }
+  resources.push(...(await readActivities(client, course, activities, warn, onText)));
   try {
     const doc = await client.page(`/mod/forum/index.php?id=${course.id}`);
     const seen = new Set<number>();
@@ -228,14 +254,66 @@ async function getCourseContents(
   return { resources, forums };
 }
 
+/** An activity (not a file, not a forum) as a snapshot resource; its text is read by readActivities. */
+function activityResource(client: MoodleClient, course: Course, cmid: number, modname: string, name: string, section: string): Resource {
+  return { key: `${cmid}:link`, cmid, courseId: course.id, section, name, modname, url: client.absolute(`/mod/${modname}/view.php?id=${cmid}`) };
+}
+
 /**
- * Files linked from section descriptions (pluginfile.php/<ctx>/course/section/<id>/<file>).
- * Some courses (e.g. CPM at Uniovi) publish everything this way, so resources.php is empty.
- * Onetopic courses render one section per page, so every `&section=N` tab is visited too.
+ * Reads each activity's page: its full text goes to onText, files linked from it become resources.
+ * A link activity's `url` becomes its target. Returns the activities plus those files.
  */
-async function scrapeSectionFiles(client: MoodleClient, course: Course, warn: Warn): Promise<Resource[]> {
+async function readActivities(client: MoodleClient, course: Course, activities: Resource[], warn: Warn, onText: OnText): Promise<Resource[]> {
+  const out: Resource[] = [];
+  const host = new URL(client.wwwroot).host;
+  for (const a of activities) {
+    const r: Resource & { filename: string } = { ...a, filename: textFilename(a.name) };
+    out.push(r);
+    try {
+      const doc = await client.page(activityTextPath(a.modname, a.cmid));
+      if (a.modname === "url") r.url = linkTarget(doc) ?? r.url;
+      const region = mainRegion(doc);
+      out.push(...linkedFiles(region, { cmid: a.cmid, courseId: course.id, section: a.section, name: a.name }));
+      const text = elementText(region, host);
+      if (text) onText(r, text);
+    } catch (err) {
+      warn(`${a.modname} ${course.shortname}`, err);
+    }
+  }
+  return out;
+}
+
+/**
+ * The course page and every section tab of it (Onetopic renders one section per page):
+ * - its text (section summaries and labels: syllabus, teachers, rules), stored as one text file;
+ * - files linked from section descriptions (pluginfile.php/<ctx>/course/section/<id>/<file>). Some
+ *   courses (e.g. CPM at Uniovi) publish everything this way, so resources.php is empty;
+ * - every activity linked there, since resources.php leaves out quizzes, assignments and the like.
+ */
+async function scrapeCoursePages(client: MoodleClient, course: Course, warn: Warn, onText: OnText): Promise<{ files: Resource[]; activities: Resource[] }> {
   const byKey = new Map<string, Resource>();
+  const activities = new Map<number, Resource>();
+  const texts: string[] = [];
+  const host = new URL(client.wwwroot).host;
   const collectFrom = (doc: Document) => {
+    const region = mainRegion(doc);
+    const text = elementText(region, host);
+    if (text && !texts.includes(text)) texts.push(text);
+    for (const a of region.querySelectorAll<HTMLAnchorElement>('a[href*="/mod/"][href*="view.php?id="]')) {
+      const m = /\/mod\/(\w+)\/view\.php\?id=(\d+)/.exec(a.href);
+      if (!m || activities.has(Number(m[2]))) continue;
+      const sectionEl = a.closest('li.section, [data-for="section"]');
+      const section = sectionEl?.querySelector(".sectionname, [data-for='section_title']")?.textContent?.trim() ?? "";
+      // The activity name without the type label ("Tarea", "Cuestionario") Moodle adds for screen readers.
+      const nameEl = a.querySelector(".instancename") ?? a;
+      const name = [...nameEl.childNodes]
+        .filter((n) => !(n instanceof Element && n.matches(".accesshide, .sr-only, .visually-hidden")))
+        .map((n) => n.textContent)
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (name) activities.set(Number(m[2]), activityResource(client, course, Number(m[2]), m[1]!, name, section));
+    }
     for (const a of doc.querySelectorAll<HTMLAnchorElement>('a[href*="/pluginfile.php/"][href*="/course/section/"]')) {
       const url = new URL(a.href);
       url.searchParams.delete("forcedownload");
@@ -273,7 +351,13 @@ async function scrapeSectionFiles(client: MoodleClient, course: Course, warn: Wa
   } catch (err) {
     warn(`section files ${course.shortname}`, err);
   }
-  return [...byKey.values()];
+  if (texts.length) {
+    const name = `Página de la asignatura ${course.shortname}`;
+    const page = { key: `course${course.id}:page`, cmid: 0, courseId: course.id, section: "", name, modname: "coursepage", url: course.url, filename: textFilename(name) };
+    byKey.set(page.key, page);
+    onText(page, texts.join("\n\n"));
+  }
+  return { files: [...byKey.values()], activities: [...activities.values()] };
 }
 
 async function scrapeFolder(

@@ -143,6 +143,16 @@ export class IdbStore implements DataStore {
     return stored;
   }
 
+  /** Is this exactly what is already stored under `key`? */
+  async sameBytes(key: string, bytes: Uint8Array): Promise<boolean> {
+    const existing = await get<StoredFile>("files", key);
+    if (!existing || existing.size !== bytes.byteLength) return false;
+    const blob = await get<Blob>("blobs", key);
+    if (!blob) return false;
+    const old = new Uint8Array(await blob.arrayBuffer());
+    return old.every((b, i) => b === bytes[i]);
+  }
+
   /** Bytes of a stored file as a Blob typed with its content type (for blob: URLs in the viewer). */
   async fileBlob(key: string): Promise<Blob | null> {
     return (await get<Blob>("blobs", key)) ?? null;

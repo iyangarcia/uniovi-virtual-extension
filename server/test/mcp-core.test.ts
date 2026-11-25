@@ -292,6 +292,35 @@ test("read_material returns 15000 chars by default and says how to continue", as
   }
 });
 
+test("activities stored as text (extension/src/activity.ts): named by kind, readable and searchable", async () => {
+  const items: Array<[Resource & { filename: string }, string]> = [
+    [{ key: "22:link", cmid: 22, courseId: 1, section: "Tema 1", name: "Comentario de sentencia", modname: "assign", url: "u22", filename: "Comentario de sentencia.txt" }, "Fecha de entrega: 10 de diciembre\nComenta la sentencia en 3 páginas."],
+    [{ key: "21:link", cmid: 21, courseId: 1, section: "Tema 1", name: "Test del tema 1", modname: "quiz", url: "u21", filename: "Test del tema 1.txt" }, "Intentos permitidos: 1"],
+    [{ key: "12:link", cmid: 12, courseId: 1, section: "", name: "Código Civil", modname: "url", url: "https://www.boe.es/x", filename: "Código Civil.txt" }, "https://www.boe.es/x"],
+    [{ key: "course1:page", cmid: 0, courseId: 1, section: "", name: "Página de la asignatura FIS", modname: "coursepage", url: "c1", filename: "Página de la asignatura FIS.txt" }, "Profesora responsable: Ana Fernández"],
+    [{ key: "22:file:/mod_assign/introattachment/0/sentencia.pdf", cmid: 22, courseId: 1, section: "Tema 1", name: "Comentario de sentencia: sentencia.pdf", modname: "activity-file", url: "u", filename: "sentencia.pdf", mimetype: "application/pdf" }, ""],
+  ];
+  const index = Object.fromEntries(
+    items.filter(([r]) => r.modname !== "activity-file").map(([r, t]) => [r.key, { key: r.key, path: `files/FIS/${r.section}/${r.filename}`, size: strToU8(t).length, contentType: "text/plain", timemodified: 1, storedAt: 1, resource: r } satisfies StoredFile]),
+  );
+  const store: DataStore = {
+    snapshot: async () => ({ ...snap, resources: items.map(([r]) => r) }),
+    index: async () => index,
+    bytes: async (f) => strToU8(items.find(([r]) => r.key === f.key)![1]),
+    readText: async () => null,
+    writeText: async () => {},
+  };
+  const c = await connect(store, true);
+  try {
+    const list = JSON.parse(text(await c.callTool({ name: "list_materials", arguments: {} }))) as Array<{ key: string; type?: string; url: string }>;
+    assert.deepEqual(list.map((i) => i.type), ["assignment", "quiz", "link", "course page", "pdf"]);
+    assert.match(text(await c.callTool({ name: "read_material", arguments: { key: "22:link" } })), /Comenta la sentencia en 3 páginas/);
+    assert.match(text(await c.callTool({ name: "search_materials", arguments: { query: "Fernández" } })), /course1:page/);
+  } finally {
+    await c.close();
+  }
+});
+
 test("search_forums: 15 posts by default, excerpts flattened and cut at 300 chars", async () => {
   const body = `Primera línea\n\n${"x".repeat(500)}`;
   const posts = Array.from({ length: 20 }, (_, i) => ({

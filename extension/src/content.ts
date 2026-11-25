@@ -41,17 +41,25 @@ async function runSync() {
     const cfg = readPageConfig();
     if (!cfg) throw new Error("No has iniciado sesión (falta sesskey)");
     const settings = await getSettings();
+    const texts: Array<{ resource: Resource & { filename: string }; text: string }> = [];
     const snapshot = await collect(new MoodleClient(cfg), {
       courseScope: settings.courseScope,
       replyWindowDays: settings.replyWindowDays,
       onProgress: (t) => progress(t),
+      onText: (resource, text) => texts.push({ resource, text }),
     });
     // Stored in the extension (chrome.storage for the panel, IndexedDB for the AI).
     await send({ type: "snapshot-collected", snapshot });
+    // Pages, links, quizzes, assignments and the course pages: stored as text, only when changed.
+    let changedTexts = 0;
+    for (const [i, t] of texts.entries()) {
+      progress(`Guardando páginas ${i + 1}/${texts.length}`);
+      if (await send<boolean>({ type: "upload-text", ...t })) changedTexts++;
+    }
     const files = await uploadPendingFiles(true);
     const summary =
       `${snapshot.courses.length} asignaturas, ${snapshot.resources.length} materiales, ${snapshot.posts.length} mensajes` +
-      (files.uploaded ? ` · ${files.uploaded} archivos nuevos` : "") +
+      (files.uploaded + changedTexts ? ` · ${files.uploaded + changedTexts} archivos nuevos` : "") +
       (files.failed ? ` (${files.failed} fallidos)` : "");
     progress(summary, false);
   } catch (err) {

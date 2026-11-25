@@ -52,6 +52,11 @@ const SHORT_TYPES: Record<string, string> = {
 };
 const shortType = (mime?: string) => (mime ? SHORT_TYPES[mime] ?? mime : undefined);
 
+/** Activities stored as their page's text (extension/src/activity.ts): named by what they are. */
+const ACTIVITY_TYPES: Record<string, string> = { url: "link", page: "page", quiz: "quiz", assign: "assignment", book: "book", lesson: "lesson", coursepage: "course page" };
+const FILE_MODS = new Set(["resource", "folder", "section-file", "activity-file"]);
+const materialType = (modname: string, mime?: string) => (FILE_MODS.has(modname) ? shortType(mime) : ACTIVITY_TYPES[modname] ?? modname);
+
 /** First `max` characters of a message with whitespace runs collapsed, "…" when cut. */
 const excerpt = (s: string, max: number) => {
   const flat = s.replace(/\s+/g, " ").trim();
@@ -143,7 +148,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       title: "List course materials",
       annotations: READ_ONLY,
       description:
-        "Files, slides, lecture notes and links published in courses. Returns each item's `key` (use with read_material) and, if downloaded, its absolute local path.",
+        "Files, slides, lecture notes, links, pages, quizzes, assignments and each course's main page published in courses. Returns each item's `key` (use with read_material) and, if downloaded, its absolute local path.",
       inputSchema: {
         course: courseArg,
         query: z.string().optional().describe("Filter by words in the material name, filename or section."),
@@ -165,7 +170,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
             section: r.section,
             name: r.name,
             filename: r.filename ?? stored?.resource.filename,
-            type: r.modname === "url" ? "link" : shortType(r.mimetype ?? stored?.contentType),
+            type: materialType(r.modname, r.mimetype ?? stored?.contentType),
             modified: r.timemodified ? when(r.timemodified) : undefined,
             localPath: stored ? pathOf(stored) : undefined,
             url: r.url,
@@ -184,7 +189,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       title: "Read course material",
       annotations: READ_ONLY,
       description:
-        "Extracts the text of a downloaded file (PDF, PPTX, DOCX, plain text). Pages/slides are marked with '--- page N ---'. Long documents are paginated by characters: pass the returned nextOffset to continue.",
+        "Extracts the text of a material: a downloaded file (PDF, PPTX, DOCX, plain text) or the full text of a page, link, quiz, assignment or course page. Pages/slides are marked with '--- page N ---'. Long documents are paginated by characters: pass the returned nextOffset to continue.",
       inputSchema: {
         key: z.string().describe("Material key from list_materials."),
         offset: z.number().int().min(0).optional().describe("Character offset to start from (default 0)."),
@@ -475,7 +480,7 @@ function registerSearchFetch(server: McpServer, store: DataStore) {
 }
 
 // Web clients (ChatGPT, Gemini) don't show MCP prompts, so the same guidance goes in the server instructions.
-const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, course materials (slides, PDFs, notes, with extracted text), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
+const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, course materials (slides, PDFs, notes, with extracted text; also the full text of each course page, pages, links, quizzes and assignments), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
 
 Be economical: every tool result counts against the student's AI limits. Use the fewest calls that answer the question, pass a course filter when you know it, and don't call a tool again for data already in this conversation.
 - Questions about content: search_materials first (short snippets with file and page/slide); often the snippets answer it. Then read_material only for the file you need: it returns about 15,000 characters per call, so follow nextOffset only if the part you need isn't there yet.
@@ -483,6 +488,7 @@ Be economical: every tool result counts against the student's AI limits. Use the
 - "What do I have this week?": get_deadlines (daysAhead 7) for assignments and calendar events, plus get_exam_dates (includeDeadlines true) for dates announced in the forums. Add search_forums (sinceDays 7) only if the student asks for news.
 - Exams: get_exam_dates for the course; for format or topics, search_forums (query "examen") and get_forum_post only on the relevant post.
 - search/fetch (materials and forum posts together) are for clients that need them; fetch returns long text, so prefer search_materials and read_material.
+- Syllabus, teachers, evaluation rules: the "course page" material of the course (list_materials with query "Página de la asignatura"), then quiz/assignment items for their dates and instructions.
 - If results look empty or stale, call sync_status; data is as fresh as the student's last sync.
 
 Rules: read-only. Work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;

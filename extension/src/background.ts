@@ -140,8 +140,7 @@ chrome.notifications.onClicked.addListener(async (id) => {
 // ---------------------------------------------------------------- file ingest
 
 /** Stores one downloaded file in IndexedDB, then, if the developer switched it on, copies it to the dev bridge. */
-async function ingestFile(resource: Resource, filename: string, contentType: string, base64: string) {
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+async function ingestFile(resource: Resource, filename: string, contentType: string, bytes: Uint8Array) {
   const snapshot = (await idbStore.snapshot()) ?? ((await chrome.storage.local.get("snapshot")).snapshot as Snapshot | undefined);
   const course = snapshot?.courses.find((c) => c.id === resource.courseId)?.shortname ?? String(resource.courseId);
   await idbStore.putFile({ ...resource, filename }, course, contentType, bytes);
@@ -150,7 +149,7 @@ async function ingestFile(resource: Resource, filename: string, contentType: str
   await sendToBridge(bridgeDeps, `/api/files?key=${encodeURIComponent(resource.key)}`, {
     method: "PUT",
     headers: { "Content-Type": contentType, "X-Resource": encodeURIComponent(JSON.stringify({ ...resource, filename })) },
-    body: bytes,
+    body: bytes as Uint8Array<ArrayBuffer>,
   }).catch(() => undefined);
 }
 
@@ -200,8 +199,16 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       return null;
 
     case "upload-file":
-      await ingestFile(msg.resource, msg.filename, msg.contentType, msg.base64);
+      await ingestFile(msg.resource, msg.filename, msg.contentType, Uint8Array.from(atob(msg.base64), (c) => c.charCodeAt(0)));
       return null;
+
+    case "upload-text": {
+      // Every sync reads every activity again: store only what changed, so the text cache stays warm.
+      const bytes = new TextEncoder().encode(msg.text);
+      if (await idbStore.sameBytes(msg.resource.key, bytes)) return false;
+      await ingestFile(msg.resource, msg.resource.filename, "text/plain", bytes);
+      return true;
+    }
 
     case "known-files": {
       // Skipped files (unreadable, too large) count as known, so the content script doesn't fetch them again.

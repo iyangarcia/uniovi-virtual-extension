@@ -43,6 +43,9 @@ test("needsDownload: readable campus files only, never links or archives", () =>
   assert.equal(needsDownload({ ...folderFile(1, "x.zip") }, {}, MAX), false);
   assert.equal(needsDownload({ ...folderFile(1, "clase.mp4"), modname: "section-file" }, {}, MAX), false);
   assert.equal(needsDownload({ ...viewResource, modname: "url", key: "9:link" }, {}, MAX), false);
+  // An assignment's attachment is a file; the assignment itself is stored as text by the collector.
+  assert.equal(needsDownload({ ...folderFile(1, "sentencia.pdf"), modname: "activity-file", key: "22:file:/x/sentencia.pdf" }, {}, MAX), true);
+  for (const modname of ["assign", "quiz", "page", "book", "coursepage"]) assert.equal(needsDownload({ ...viewResource, modname, key: "22:link" }, {}, MAX), false, modname);
   assert.equal(needsDownload({ ...folderFile(1), filesize: MAX + 1 }, {}, MAX), false, "known oversize");
 });
 

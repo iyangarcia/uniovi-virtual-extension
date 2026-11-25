@@ -58,5 +58,5 @@ export function isReadableFile(f: { filename?: string; mimetype?: string }): boo
   return ext ? false : undefined;
 }
 
-/** A file on the campus (not a link, page or forum): what the collector may download. */
-export const isCampusFile = (r: { modname: string }) => r.modname === "resource" || r.modname === "folder" || r.modname === "section-file";
+/** A file on the campus (not a link, page or forum): what the collector may download. activity-file: linked from a page, an assignment... (activity.ts). */
+export const isCampusFile = (r: { modname: string }) => ["resource", "folder", "section-file", "activity-file"].includes(r.modname);

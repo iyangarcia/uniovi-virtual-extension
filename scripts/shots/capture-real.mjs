@@ -13,7 +13,8 @@
 // It clicks nothing unless --click is given, and never an element whose text is a confirm word.
 // usage: node capture-real.mjs --site claude|chatgpt|gemini --step <name> --out <dir>
 //          [--highlight <selector> | --highlight-text <button text>] [--label <text>] [--n <number>]
-//          [--click <selector>]
+//          [--click <selector>] [--hide <selector>] [--clip <selector>] [--pad <px>]
+// --hide: display:none on those elements (e.g. a sidebar); --clip: crop to that element's box (+pad, default 24).
 import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -28,7 +29,7 @@ const FAKE_EMAIL = "estudiante@example.com";
 const opts = args();
 const site = opts.site;
 if (!ORIGINS[site] || typeof opts.step !== "string" || typeof opts.out !== "string") {
-  console.error("usage: node capture-real.mjs --site claude|chatgpt|gemini --step <name> --out <dir> [--highlight <sel> | --highlight-text <text>] [--label <text>] [--n <k>] [--click <sel>]");
+  console.error("usage: node capture-real.mjs --site claude|chatgpt|gemini --step <name> --out <dir> [--highlight <sel> | --highlight-text <text>] [--label <text>] [--n <k>] [--click <sel>] [--hide <sel>] [--clip <sel>] [--pad <px>]");
   process.exit(2);
 }
 const out = resolve(opts.out);
@@ -50,6 +51,8 @@ try {
     await el.click();
     await sleep(800);
   }
+
+  if (typeof opts.hide === "string") await page.$$eval(opts.hide, (els) => els.forEach((e) => e.style.setProperty("display", "none", "important")));
 
   const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   await page.setViewport({ width, height, deviceScaleFactor: 2 });
@@ -142,7 +145,17 @@ try {
   }
 
   const file = join(out, `${opts.step}.png`);
-  await page.screenshot({ path: file });
+  let clip;
+  if (typeof opts.clip === "string") {
+    const el = await page.waitForSelector(opts.clip, { timeout: 10000 });
+    const box = await el.boundingBox();
+    if (!box) throw new Error(`--clip ${opts.clip}: not visible`);
+    const pad = Number(opts.pad ?? 24);
+    const vw = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    const x = Math.max(0, box.x - pad), y = Math.max(0, box.y - pad);
+    clip = { x, y, width: Math.min(vw.w - x, box.width + 2 * pad), height: Math.min(vw.h - y, box.height + 2 * pad) };
+  }
+  await page.screenshot({ path: file, ...(clip ? { clip } : {}) });
   log("saved", file);
 } catch (e) {
   failed = true;

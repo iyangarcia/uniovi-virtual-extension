@@ -1,6 +1,6 @@
 # Uniovi Virtual con tu IA: guía paso a paso
 
-Con esta extensión de Chrome, tu IA (Claude o ChatGPT) puede **consultar tu Campus Virtual**:
+Con esta extensión de Chrome, tu IA (Claude, ChatGPT o Gemini) puede **consultar tu Campus Virtual**:
 
 - buscar dentro de las diapositivas y PDFs de todas tus asignaturas (y decirte la página);
 - ver tus entregas y exámenes ordenados por fecha;
@@ -75,16 +75,18 @@ Tu IA se conecta con un **enlace personal** que crea la extensión. Solo hay que
 | IA | ¿Funciona? | Qué necesitas |
 |---|---|---|
 | **Claude** (claude.ai) | Sí, gratis | Una cuenta gratuita. El plan gratis permite 1 conector, justo el que necesitas. **Recomendado.** |
-| **ChatGPT** | Sí, de pago | Plan Plus o superior. El plan gratuito no permite añadir conectores. |
-| **Gemini** | Probablemente aún no | De momento no parece estar disponible en España. |
+| **ChatGPT** | Sí, gratis | Una cuenta gratuita basta. |
+| **Gemini** | Sí, avanzado (Modo desarrollador, en inglés) | Una cuenta de Google. Los menús están en inglés y el plan gratuito se agota rápido. |
 
 ### Forma fácil: «Conectar automáticamente»
 
 1. Abre la página de bienvenida (o el botón de la extensión → **Cómo conectarla**).
 2. En la tarjeta de tu IA, pulsa **Conectar automáticamente**.
-3. Chrome te pide permiso para esa página (claude.ai o chatgpt.com). Pulsa **Permitir**.
+3. Chrome te pide permiso para esa página (claude.ai, chatgpt.com o gemini.google.com). Pulsa **Permitir**.
 4. Se abre la página de conectores de tu IA con el nombre y el enlace **ya escritos**.
-5. Revisa y pulsa el botón de confirmar de la propia IA (por ejemplo, **Añadir**).
+5. Revisa y pulsa el botón de confirmar de la propia IA (por ejemplo, **Añadir**). En Gemini hay varias pantallas: mira su apartado más abajo.
+
+En las imágenes el enlace aparece tapado (`https://…/mcp/••••••••/••••••••`); el tuyo será distinto.
 
 Si algo no sale bien, la extensión te lo dice y puedes usar la forma manual.
 
@@ -94,18 +96,51 @@ Si algo no sale bien, la extensión te lo dice y puedes usar la forma manual.
 2. Pégalo en tu IA como **conector personalizado**:
 
 **Claude (claude.ai)**
-1. Menú de tu cuenta → **Personalizar** (*Customize*) → **Conectores** (*Connectors*).
-2. **Añadir** → **Añadir conector personalizado** (*Add custom connector*).
-3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Pulsa **Añadir**.
+1. Ve a **Plugins** (también se llega desde **Personalizar → Conectores**).
+2. **Add** → **Add custom connector** (en español: **Añadir** → **Añadir conector personalizado**).
+
+![Menú Add de Claude con Add custom connector](img/claude-1-conectores.png)
+
+3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Pulsa **Continue** (o **Añadir** si Claude está en español).
+
+![Ventana Add custom connector con el nombre y el enlace tapado](img/claude-2-formulario.png)
+
 4. En un chat nuevo, comprueba que Uniovi Virtual está activado en el menú de herramientas.
 
 En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro, tendrás que quitarlo para añadir este.
 
-**ChatGPT (Plus o superior)**
-1. Ve a <https://chatgpt.com/plugins> y pulsa **+**.
-2. Elige **Añadir servidor MCP personalizado** (*Add custom MCP server*).
-3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Sin autenticación (*No authentication*). Guarda.
-4. En el chat, elige Uniovi Virtual en el menú **+**.
+**ChatGPT (también gratis)**
+1. Ve a <https://chatgpt.com/plugins> y pulsa **Añadir**.
+2. Elige **Añadir servidor MCP personalizado**.
+
+![Menú Añadir de ChatGPT con Añadir servidor MCP personalizado](img/chatgpt-1-menu.png)
+
+3. Nombre: `Uniovi Virtual`. En **URL del servidor**: pega el enlace.
+4. Marca **Lo entiendo y quiero continuar** y pulsa **Crear como complemento**.
+
+![Formulario de ChatGPT con el nombre, el enlace tapado y la casilla Lo entiendo y quiero continuar](img/chatgpt-2-formulario.png)
+
+5. En el chat, elige Uniovi Virtual en el menú **+**.
+
+**Gemini (Modo desarrollador)**
+
+Es la opción más avanzada: todo está en inglés y hay tres pantallas. Con **Conectar automáticamente** la extensión hace casi todo; solo te deja a ti marcar el aviso y pulsar **Connect**.
+1. Ve a <https://gemini.google.com/devmode> y pulsa **Create new**.
+2. Pega el enlace en **MCP server URL** y pulsa **Next**.
+
+![Gemini: ventana Connect to an MCP server con el enlace tapado](img/gemini-1-url.png)
+
+3. Lee el aviso, marca **I understand and accept…** y pulsa **Connect**.
+
+![Gemini: casilla I understand and accept y botón Connect](img/gemini-2-aviso.png)
+
+4. En **App name** escribe `Uniovi Virtual` (con la forma automática ya está escrito). Debajo verás la lista de lo que puede consultar. Pulsa **Connect**.
+
+![Gemini: ventana Save your custom app con el nombre Uniovi Virtual](img/gemini-3-nombre.png)
+
+5. En un chat normal escribe `@Uniovi Virtual` y tu pregunta. Cuando pregunte si puede usarlo, responde **Permitir siempre**.
+
+El plan gratuito de Gemini se agota rápido; si te quedas sin mensajes, prueba con Claude.
 
 Los menús de las IAs cambian a menudo. Si no encuentras la opción, busca «conectores» o «MCP» en la ayuda de tu IA.
 
@@ -168,7 +203,7 @@ Tu IA **solo** puede leer tus apuntes mientras Chrome está abierto en tu ordena
 
 Si Chrome está cerrado (o el ordenador apagado o suspendido), la IA te dirá algo como: «Uniovi Virtual no está conectado: abre Chrome…». Abre Chrome, espera unos segundos y vuelve a preguntar.
 
-Puedes preguntar desde el móvil (en la app de Claude o ChatGPT) siempre que Chrome siga abierto en tu ordenador.
+Puedes preguntar desde el móvil (en la app de tu IA) siempre que Chrome siga abierto en tu ordenador.
 
 ---
 
@@ -189,7 +224,7 @@ Tus apuntes y tu enlace **se mantienen**: no tienes que volver a conectar la IA.
 - **Tus archivos se quedan en tu ordenador**, dentro de Chrome. No se suben a ningún sitio.
 - **Tus preguntas y las respuestas pasan por el servicio de conexión**, que solo las reenvía entre tu IA y tu Chrome. **No guarda nada.**
 - **El enlace es personal, como una contraseña.** Quien lo tenga puede leer tus asignaturas, apuntes y avisos mientras tu Chrome esté abierto. No lo compartas. Si crees que se ha filtrado, usa **Cambiar enlace** (sección 6).
-- Lo que tu IA lee (un PDF, una lista de fechas, un aviso…) pasa a tu conversación con esa empresa (Anthropic u OpenAI) y se rige por sus condiciones, como cualquier cosa que le escribas.
+- Lo que tu IA lee (un PDF, una lista de fechas, un aviso…) pasa a tu conversación con esa empresa (Anthropic, OpenAI o Google) y se rige por sus condiciones, como cualquier cosa que le escribas.
 - Todo es **de solo lectura**: la IA no puede entregar tareas, escribir en foros ni cambiar nada del campus.
 
 ---

@@ -137,7 +137,7 @@ non-technical person install it) go in docs/PRUEBAS-MANUALES.md or relay/DESPLIE
   - The extracted zip loads in Chrome for Testing and its worker starts with the fixed ID.
   - `docs/index.html` is the Pages download page: Descargar → `releases/latest/download/uniovi-virtual.zip`, 3 steps with real Spanish `chrome://extensions` screenshots, "¿Qué IA puedo usar?", privacy, updates and an FAQ.
   - `docs/USO-CON-IA-WEB.md`, `docs/PRUEBAS-MANUALES.md`, CLAUDE.md and README were rewritten. The coordinator corrected the Mis apuntes viewer note in CLAUDE.md.
-- **Not verified (manual):** auto-fill on the real claude.ai/chatgpt.com/gemini (start URLs and selectors come from web notes); the real `chrome.permissions.request` prompt; the toolbar popup; GitHub Pages rendering; Edge. `paso3-extension-cargada.png` still shows the old name "Uniovi Virtual → Claude" and should be retaken (`tmp/pptr/g5f-shots.mjs`).
+- **Not verified (manual):** auto-fill on the real claude.ai/chatgpt.com/gemini (start URLs and selectors come from web notes); the real `chrome.permissions.request` prompt; the toolbar popup; GitHub Pages rendering; Edge.
 
 ### Section 7: review and gate
 - **Review agent** (read-only, over `ab0dbc6..master`) reported 4 important, 12 minor and nit, 5 simplification findings and 3 test gaps, with a list of what it checked and found correct (relay security, agent, MCP-core parity, IndexedDB, viewer rendering, update check, zip layout). Two fix agents then worked in parallel worktrees:

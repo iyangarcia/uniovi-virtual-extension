@@ -83,8 +83,8 @@ try {
           const v = swap(t.nodeValue);
           if (v !== t.nodeValue) t.nodeValue = v;
         }
-        for (const el of root.querySelectorAll("[aria-label], [title], [alt], [placeholder]")) {
-          for (const a of ["aria-label", "title", "alt", "placeholder"]) {
+        for (const el of root.querySelectorAll("[aria-label], [title], [alt], [placeholder], [value], [href]")) {
+          for (const a of ["aria-label", "title", "alt", "placeholder", "value", "href"]) {
             const v = el.getAttribute(a);
             if (v != null && swap(v) !== v) el.setAttribute(a, swap(v));
           }
@@ -115,6 +115,7 @@ try {
           if (/\/mcp\//.test(input.value) || input.type === "url") {
             const proto = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
             if (input.value) Object.getOwnPropertyDescriptor(proto, "value").set.call(input, masked);
+            if (input.hasAttribute("value")) input.setAttribute("value", masked);
           }
         }
       }

@@ -135,10 +135,11 @@ try {
   if (typeof opts.highlight === "string" || typeof opts["highlight-text"] === "string") {
     let target = opts.highlight;
     if (typeof opts["highlight-text"] === "string") {
-      const wanted = opts["highlight-text"].toLowerCase();
+      const clean = (v) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const wanted = clean(opts["highlight-text"]);
       const handles = await page.$$("button, [role='button'], [role='menuitem'], a, input, label");
       for (const h of handles) {
-        const t = await h.evaluate((e) => (e.innerText || e.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase());
+        const t = clean(await h.evaluate((e) => e.innerText || e.getAttribute("aria-label") || ""));
         const box = await h.boundingBox();
         if (box && t === wanted) {
           target = h;

@@ -55,8 +55,11 @@ try {
   if (typeof opts.hide === "string") await page.$$eval(opts.hide, (els) => els.forEach((e) => e.style.setProperty("display", "none", "important")));
 
   const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  await page.setViewport({ width, height, deviceScaleFactor: 2 });
-  await sleep(300);
+  // Already at 2x (set before opening a menu): no resize, which would close popovers.
+  if ((await page.evaluate(() => devicePixelRatio)) !== 2) {
+    await page.setViewport({ width, height, deviceScaleFactor: 2 });
+    await sleep(300);
+  }
 
   await page.evaluate(
     ({ names, emails, fakeName, fakeEmail, titles, masked }) => {

@@ -66,6 +66,33 @@ export interface CalendarEvent {
   url?: string;
 }
 
+/** One row of the student's own grade report in a course (grade/report/user). Strings as shown. */
+export interface GradeItem {
+  courseId: number;
+  /** Grade categories above the item, outermost first, without the course itself ("Teoría"). */
+  category: string[];
+  name: string;
+  /** Moodle's label for the item kind ("Tarea", "Elemento manual", "Cálculo total"...). */
+  kind?: string;
+  /** A category or course total, not a graded item. */
+  total: boolean;
+  /** "7.50", "-" when not graded yet. */
+  grade: string;
+  range?: string;
+  percentage?: string;
+  feedback?: string;
+  contribution?: string;
+}
+
+/** A teacher of a course (participants page, teacher roles only: never other students). */
+export interface Teacher {
+  courseId: number;
+  name: string;
+  role: string;
+  /** Groups the teacher is in, e.g. practice groups they teach. */
+  groups: string[];
+}
+
 export interface Snapshot {
   syncedAt: number;
   siteUrl: string;
@@ -74,6 +101,11 @@ export interface Snapshot {
   posts: ForumPost[];
   assignments: Assignment[];
   events: CalendarEvent[];
+  /** The student's own grades (absent when the student turned grades off, or in older snapshots). */
+  grades?: GradeItem[];
+  teachers?: Teacher[];
+  /** The student's own groups per course id ("PA-Ing-02", "PL-I-1-C"). */
+  myGroups?: Record<number, string[]>;
   /** Non-fatal problems during collection (a WS call disabled, a page that failed to parse...). */
   warnings: string[];
 }

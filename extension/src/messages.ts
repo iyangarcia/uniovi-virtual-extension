@@ -33,6 +33,8 @@ export interface Settings {
   maxFileMB: number;
   replyWindowDays: number;
   notify: boolean;
+  /** Sync the student's own grades so the AI can read them. */
+  syncGrades: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxFileMB: 40,
   replyWindowDays: 120,
   notify: true,
+  syncGrades: true,
 };
 
 export async function getSettings(): Promise<Settings> {

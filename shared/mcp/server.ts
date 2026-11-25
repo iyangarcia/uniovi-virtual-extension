@@ -126,7 +126,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
 
   server.registerTool(
     "list_courses",
-    { title: "List courses", annotations: READ_ONLY, description: "Courses the student is enrolled in, with material/post counts.", inputSchema: {} },
+    { title: "List courses", annotations: READ_ONLY, description: "Courses the student is enrolled in, with material/post counts and the student's own groups.", inputSchema: {} },
     wrap(async () => {
       const s = await requireSnapshot();
       return ok(
@@ -137,7 +137,67 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
           url: c.url,
           materials: s.resources.filter((r) => r.courseId === c.id).length,
           forumPosts: s.posts.filter((p) => p.courseId === c.id).length,
+          myGroups: s.myGroups?.[c.id]?.length ? s.myGroups[c.id] : undefined,
         })),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "get_grades",
+    {
+      title: "Get my grades",
+      annotations: READ_ONLY,
+      description:
+        "The student's own grades per course, as in the campus grade report: each graded item with its category, grade, range, percentage, feedback, and the category and course totals. \"-\" means not graded yet.",
+      inputSchema: { course: courseArg, gradedOnly: z.boolean().optional().describe("Only items that already have a grade, plus totals (default false).") },
+    },
+    wrap(async ({ course, gradedOnly = false }: { course?: string; gradedOnly?: boolean }) => {
+      const s = await requireSnapshot();
+      if (!s.grades) return ok({ note: "Grades are not synced: the student turned them off in the extension (Opciones avanzadas), or the last sync predates them." });
+      return ok(
+        matchCourses(s, course).map((c) => ({
+          course: c.shortname,
+          items: s.grades!
+            .filter((g) => g.courseId === c.id && (!gradedOnly || g.total || g.grade !== "-"))
+            .map((g) => ({
+              category: g.category.length ? g.category.join(" > ") : undefined,
+              name: g.name,
+              kind: g.kind,
+              total: g.total || undefined,
+              grade: g.grade,
+              range: g.range,
+              percentage: g.percentage && g.percentage !== "-" ? g.percentage : undefined,
+              feedback: g.feedback || undefined,
+              contribution: g.contribution && g.contribution !== "-" ? g.contribution : undefined,
+            })),
+        })),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "get_teachers",
+    {
+      title: "Get teachers and my groups",
+      annotations: READ_ONLY,
+      description:
+        "Teachers of each course (name, role, the groups each one is in) and the student's own groups, so you can tell which teacher has the student's practice/seminar group. Emails are not available; the course page material may list them.",
+      inputSchema: { course: courseArg },
+    },
+    wrap(async ({ course }: { course?: string }) => {
+      const s = await requireSnapshot();
+      return ok(
+        matchCourses(s, course).map((c) => {
+          const mine = s.myGroups?.[c.id] ?? [];
+          return {
+            course: c.shortname,
+            myGroups: mine,
+            teachers: (s.teachers ?? [])
+              .filter((t) => t.courseId === c.id)
+              .map((t) => ({ name: t.name, role: t.role, sharesMyGroups: t.groups.filter((g) => mine.includes(g)), groups: t.groups })),
+          };
+        }),
       );
     }),
   );
@@ -480,7 +540,7 @@ function registerSearchFetch(server: McpServer, store: DataStore) {
 }
 
 // Web clients (ChatGPT, Gemini) don't show MCP prompts, so the same guidance goes in the server instructions.
-const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, course materials (slides, PDFs, notes, with extracted text; also the full text of each course page, pages, links, quizzes and assignments), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
+const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, the student's own grades, teachers and groups, course materials (slides, PDFs, notes, with extracted text; also the full text of each course page, pages, links, quizzes and assignments), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
 
 Be economical: every tool result counts against the student's AI limits. Use the fewest calls that answer the question, pass a course filter when you know it, and don't call a tool again for data already in this conversation.
 - Questions about content: search_materials first (short snippets with file and page/slide); often the snippets answer it. Then read_material only for the file you need: it returns about 15,000 characters per call, so follow nextOffset only if the part you need isn't there yet.
@@ -488,7 +548,8 @@ Be economical: every tool result counts against the student's AI limits. Use the
 - "What do I have this week?": get_deadlines (daysAhead 7) for assignments and calendar events, plus get_exam_dates (includeDeadlines true) for dates announced in the forums. Add search_forums (sinceDays 7) only if the student asks for news.
 - Exams: get_exam_dates for the course; for format or topics, search_forums (query "examen") and get_forum_post only on the relevant post.
 - search/fetch (materials and forum posts together) are for clients that need them; fetch returns long text, so prefer search_materials and read_material.
-- Syllabus, teachers, evaluation rules: the "course page" material of the course (list_materials with query "Página de la asignatura"), then quiz/assignment items for their dates and instructions.
+- Grades: get_grades (gradedOnly true), with the evaluation rules from the course page. Teachers and the student's groups: get_teachers.
+- Syllabus, evaluation rules: the course's "course page" material (list_materials query "Página de la asignatura").
 - If results look empty or stale, call sync_status; data is as fresh as the student's last sync.
 
 Rules: read-only. Work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;

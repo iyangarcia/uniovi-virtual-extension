@@ -51,6 +51,41 @@ export const pages = {
 };
 pages["/course/view.php?id=7&section=0"] = pages["/course/view.php?id=7"];
 
+// Grade report as seen live (2026-11-25): item names in .rowtitle under a .dimmed_text kind label,
+// categories as th.category by level, totals with class baggt, an action menu inside quiz grade cells.
+const menu = `<div class="action-menu moodle-actionmenu"><a href="/grade/report/grader/analysis.php">Análisis de calificaciones</a><div class="dropdown-menu">Análisis de calificaciones</div></div>`;
+const gitem = (level, name, kind, grade, pct, total = false) =>
+  `<tr><th class="level${level} ${total ? "baggt" : "item"} b1b column-itemname"><div><span class="d-block dimmed_text">${kind}</span><div class="rowtitle"><span class="gradeitemheader">${name}</span></div></div></th>
+   <td class="level${level} column-grade"><div><div>${grade}</div>${kind === "Cuestionario" ? menu : ""}</div></td><td class="column-range">0–10</td><td class="column-percentage">${pct}</td>
+   <td class="column-feedback">${grade === "7,50" ? "Buen análisis del caso." : ""}</td><td class="column-contributiontocoursetotal">-</td></tr>`;
+pages["/grade/report/user/index.php?id=7"] = page(`<table class="generaltable user-grade"><thead><tr><th>Elemento de calificación</th><th>Calificación</th></tr></thead><tbody>
+  <tr><th class="level1 category column-itemname" colspan="8">Derecho Civil I</th></tr><tr><td class="level1"></td></tr>
+  <tr><th class="level2 category column-itemname" colspan="7">Teoría</th></tr>
+  ${gitem(3, "Parcial 1", "Elemento manual", "7,50", "75,00 %")}
+  ${gitem(3, "Test del tema 1", "Cuestionario", "-", "-")}
+  ${gitem(2, "Total Teoría", "Cálculo total", "7,50", "75,00 %", true)}
+  <tr><th class="level2 category column-itemname" colspan="7">Prácticas</th></tr>
+  ${gitem(3, "Comentario de sentencia", "Tarea", "6,00", "60,00 %")}
+  ${gitem(1, "Total del curso", "Cálculo total", "-", "-", true)}
+</tbody></table>`);
+
+// Participants: roleid=3 lists the teacher; roleid=4 matches nobody, so the page ignores the filter
+// and lists everyone (as live): the students here must never reach the snapshot.
+const person = (id, name, role, groups) =>
+  `<tr><td class="c0"><input type="checkbox"></td><th class="c1"><a href="/user/view.php?id=${id}&course=7">${name}</a></th><td class="c2">${role}</td><td class="c3">${groups}</td><td class="c4">1 hora</td></tr>`;
+const participants = (rows) => page(`<table id="participants" class="generaltable"><thead><tr><th class="c0">Seleccionar todos</th><th class="c1">Nombre / Apellido(s)</th><th class="c2">Roles</th><th class="c3">Grupos</th><th class="c4">Último acceso al curso</th></tr></thead>
+  <tbody>${rows}<tr class="emptyrow"><td></td></tr></tbody></table>`);
+pages["/user/index.php?id=7&roleid=3&perpage=5000"] = participants(person(501, "FERNÁNDEZ LÓPEZ,ANA", "Profesor", "PA-01, PA-02, TE-01"));
+pages["/user/index.php?id=7&roleid=4&perpage=5000"] = participants(
+  person(501, "FERNÁNDEZ LÓPEZ,ANA", "Profesor", "PA-01, PA-02, TE-01") +
+    person(502, "COMPAÑERA PRIVADA,LUCÍA", "Estudiante", "PA-02, TE-01") +
+    person(503, "GARCÍA RUIZ,PEDRO", "Profesor sin permiso de edición", "PA-01") +
+    person(504, "COMPAÑERO PRIVADO,MARCOS", "Estudiante", "No hay grupos"),
+);
+// The student's own course profile (no id): "Grupo" with links.
+pages["/user/view.php?course=7"] = page(`<section><dl><dt>Dirección de correo</dt><dd>UO000000@uniovi.es</dd></dl>
+  <dl><dt>Roles</dt><dd>Estudiante</dd></dl><dl><dt>Grupo</dt><dd> <a href="/group/1">PA-02</a>, <a href="/group/2">TE-01</a></dd></dl></section>`);
+
 export const ws = {
   core_course_get_enrolled_courses_by_timeline_classification: {
     courses: [{ id: 7, shortname: "DCI", fullname: "Derecho Civil I", viewurl: "https://campus.test/course/view.php?id=7" }],

@@ -55,6 +55,7 @@ try {
       courseScope: "inprogress",
       replyWindowDays: 7,
       onProgress: () => undefined,
+      grades: true,
       onText: (r, t) => (texts[r.key] = { name: r.name, modname: r.modname, filename: r.filename, text: t }),
     });
     return { snapshot, texts };
@@ -84,6 +85,29 @@ try {
   // Files and forums are not read as pages.
   check(!texts["13:/"] && !requested.some((p) => p.startsWith("/mod/forum/view.php?id=") || p.startsWith("/mod/resource/view.php?id=13&forceview")), "files and forums not read as pages");
   check(res("13:/")?.modname === "resource", "file still listed as a file");
+
+  // Grades, teachers, groups.
+  log("grades:", JSON.stringify(snapshot.grades));
+  log("teachers:", JSON.stringify(snapshot.teachers), "myGroups:", JSON.stringify(snapshot.myGroups));
+  const g = (name) => snapshot.grades?.find((x) => x.name === name);
+  check(g("Parcial 1")?.grade === "7,50" && g("Parcial 1")?.category.join(">") === "Teoría" && g("Parcial 1")?.kind === "Elemento manual" && g("Parcial 1")?.feedback === "Buen análisis del caso.", "grade item with category, kind and feedback");
+  check(g("Test del tema 1")?.grade === "-", `quiz grade cell without its action menu ("${g("Test del tema 1")?.grade}")`);
+  check(g("Comentario de sentencia")?.category.join(">") === "Prácticas" && g("Total Teoría")?.total === true && g("Total del curso")?.total === true && g("Total del curso")?.category.length === 0, "categories follow the levels; totals marked");
+  check(snapshot.grades?.length === 5, `5 grade rows (${snapshot.grades?.length})`);
+  const names = (snapshot.teachers ?? []).map((t) => t.name).sort();
+  check(JSON.stringify(names) === JSON.stringify(["FERNÁNDEZ LÓPEZ,ANA", "GARCÍA RUIZ,PEDRO"]), `teachers only, once each (${names.join("; ")})`);
+  check(!JSON.stringify(snapshot).includes("COMPAÑER"), "no other student anywhere in the snapshot");
+  check(JSON.stringify(snapshot.teachers?.find((t) => t.name.startsWith("FERN"))?.groups) === JSON.stringify(["PA-01", "PA-02", "TE-01"]), "teacher groups");
+  check(JSON.stringify(snapshot.myGroups) === JSON.stringify({ 7: ["PA-02", "TE-01"] }), "my groups from my course profile");
+
+  // Grades off: none collected, not even requested.
+  const off = await tab.evaluate(async (origin) => {
+    const before = performance.getEntriesByType("resource").length;
+    const s = await uv.collect(new uv.MoodleClient({ wwwroot: origin, sesskey: "x" }), { courseScope: "inprogress", replyWindowDays: 7, onProgress: () => undefined, grades: false });
+    const gradeFetches = performance.getEntriesByType("resource").slice(before).filter((e) => e.name.includes("/grade/")).length;
+    return { hasGrades: "grades" in s, gradeFetches, teachers: s.teachers.length };
+  }, ORIGIN);
+  check(!off.hasGrades && off.gradeFetches === 0 && off.teachers === 2, `grades off: no grades, no grade page fetched (${JSON.stringify(off)})`);
 } catch (e) {
   fail++;
   log("FAIL exception", e.stack);

@@ -65,6 +65,7 @@ async function initSettings() {
       maxFileMB: Number($<HTMLInputElement>("maxFileMB").value) || 40,
       replyWindowDays: Number($<HTMLInputElement>("replyWindowDays").value) || 0,
       notify: $<HTMLInputElement>("notify").checked,
+      syncGrades: $<HTMLInputElement>("syncGrades").checked,
     };
     await chrome.storage.local.set({ settings: next });
   };
@@ -75,7 +76,8 @@ async function initSettings() {
   $<HTMLInputElement>("maxFileMB").value = String(s.maxFileMB);
   $<HTMLInputElement>("replyWindowDays").value = String(s.replyWindowDays);
   $<HTMLInputElement>("notify").checked = s.notify;
-  for (const id of ["courseScope", "autoSync", "autoSyncHours", "downloadFiles", "maxFileMB", "replyWindowDays", "notify"]) {
+  $<HTMLInputElement>("syncGrades").checked = s.syncGrades;
+  for (const id of ["courseScope", "autoSync", "autoSyncHours", "downloadFiles", "maxFileMB", "replyWindowDays", "notify", "syncGrades"]) {
     $(id).addEventListener("change", () => void save());
   }
 }

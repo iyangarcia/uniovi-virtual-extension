@@ -207,6 +207,8 @@ test("MCP round trip: tools listed, version passed, local paths only in local mo
       "get_deadlines",
       "get_exam_dates",
       "get_forum_post",
+      "get_grades",
+      "get_teachers",
       "list_courses",
       "list_materials",
       "read_material",
@@ -318,6 +320,47 @@ test("activities stored as text (extension/src/activity.ts): named by kind, read
     assert.match(text(await c.callTool({ name: "search_materials", arguments: { query: "Fernández" } })), /course1:page/);
   } finally {
     await c.close();
+  }
+});
+
+test("get_grades, get_teachers and my groups", async () => {
+  const s: Snapshot = {
+    ...snap,
+    grades: [
+      { courseId: 1, category: ["Teoría"], name: "Parcial 1", kind: "Elemento manual", total: false, grade: "7,50", range: "0–10", percentage: "75,00 %", feedback: "Bien", contribution: "-" },
+      { courseId: 1, category: ["Teoría"], name: "Test 1", kind: "Cuestionario", total: false, grade: "-", range: "0–10", percentage: "-" },
+      { courseId: 1, category: [], name: "Total del curso", kind: "Cálculo total", total: true, grade: "-", range: "0–10" },
+      { courseId: 2, category: [], name: "Examen", total: false, grade: "9,00", range: "0–10" },
+    ],
+    teachers: [
+      { courseId: 1, name: "FERNÁNDEZ LÓPEZ,ANA", role: "Profesor", groups: ["PA-01", "PA-02"] },
+      { courseId: 1, name: "GARCÍA RUIZ,PEDRO", role: "Profesor", groups: ["PA-01"] },
+    ],
+    myGroups: { 1: ["PA-02"] },
+  };
+  const store = (snapshot: Snapshot): DataStore => ({ snapshot: async () => snapshot, index: async () => ({}), bytes: async () => new Uint8Array(), readText: async () => null, writeText: async () => {} });
+  const c = await connect(store(s), true);
+  try {
+    const grades = JSON.parse(text(await c.callTool({ name: "get_grades", arguments: { course: "FIS", gradedOnly: true } }))) as Array<{ course: string; items: Array<Record<string, unknown>> }>;
+    assert.equal(grades.length, 1);
+    assert.deepEqual(grades[0]!.items.map((i) => i.name), ["Parcial 1", "Total del curso"]);
+    assert.deepEqual(grades[0]!.items[0], { category: "Teoría", name: "Parcial 1", kind: "Elemento manual", grade: "7,50", range: "0–10", percentage: "75,00 %", feedback: "Bien" });
+    const all = JSON.parse(text(await c.callTool({ name: "get_grades", arguments: {} }))) as Array<{ items: unknown[] }>;
+    assert.deepEqual(all.map((x) => x.items.length), [3, 1]);
+    const teachers = JSON.parse(text(await c.callTool({ name: "get_teachers", arguments: { course: "FIS" } }))) as Array<{ myGroups: string[]; teachers: Array<{ name: string; sharesMyGroups: string[] }> }>;
+    assert.deepEqual(teachers[0]!.myGroups, ["PA-02"]);
+    assert.deepEqual(teachers[0]!.teachers.map((t) => [t.name, t.sharesMyGroups]), [["FERNÁNDEZ LÓPEZ,ANA", ["PA-02"]], ["GARCÍA RUIZ,PEDRO", []]]);
+    assert.match(text(await c.callTool({ name: "list_courses", arguments: {} })), /"myGroups":\["PA-02"\]/);
+  } finally {
+    await c.close();
+  }
+  // Grades switched off in the extension: the snapshot has no `grades`, and the tool says why.
+  const { grades: _off, ...noGrades } = s;
+  const c2 = await connect(store(noGrades), true);
+  try {
+    assert.match(text(await c2.callTool({ name: "get_grades", arguments: {} })), /turned them off/);
+  } finally {
+    await c2.close();
   }
 });
 

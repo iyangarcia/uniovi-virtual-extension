@@ -44,6 +44,7 @@ async function runSync() {
     const texts: Array<{ resource: Resource & { filename: string }; text: string }> = [];
     const snapshot = await collect(new MoodleClient(cfg), {
       courseScope: settings.courseScope,
+      grades: settings.syncGrades,
       replyWindowDays: settings.replyWindowDays,
       onProgress: (t) => progress(t),
       onText: (resource, text) => texts.push({ resource, text }),

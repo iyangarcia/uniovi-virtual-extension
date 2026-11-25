@@ -1,6 +1,7 @@
-import type { Assignment, CalendarEvent, Course, ForumPost, Resource, Snapshot } from "../../shared/types.ts";
+import type { Assignment, CalendarEvent, Course, ForumPost, GradeItem, Resource, Snapshot, Teacher } from "../../shared/types.ts";
 import { activityTextPath, elementText, linkedFiles, linkTarget, mainRegion, textFilename, wantsText } from "./activity.ts";
 import { htmlToText, MoodleClient, MoodleError } from "./moodle.ts";
+import { parseGradeReport, parseMyGroups, parseTeachers } from "./people.ts";
 
 export interface CollectOptions {
   /** "inprogress" (default) or "all" (includes past/future courses). */
@@ -8,6 +9,8 @@ export interface CollectOptions {
   /** Fetch replies for discussions active within this many days. */
   replyWindowDays: number;
   onProgress: (msg: string) => void;
+  /** Read the student's own grades (Settings.syncGrades). */
+  grades?: boolean;
   /** Full text of an activity or course page (stored as a text file once the snapshot is saved). */
   onText?: (r: Resource & { filename: string }, text: string) => void;
 }
@@ -73,6 +76,17 @@ export async function collect(client: MoodleClient, opts: CollectOptions): Promi
   const assignments = await getAssignments(client, courses, warn);
   const events = await getEvents(client, warn);
 
+  opts.onProgress("Reading grades and teachers…");
+  const grades: GradeItem[] = [];
+  const teachers: Teacher[] = [];
+  const myGroups: Record<number, string[]> = {};
+  await mapLimit(courses, 3, async (course) => {
+    if (opts.grades) grades.push(...(await getGrades(client, course, warn)));
+    teachers.push(...(await getTeachers(client, course, warn)));
+    const groups = await getMyGroups(client, course, warn);
+    if (groups.length) myGroups[course.id] = groups;
+  });
+
   return {
     syncedAt: now(),
     siteUrl: client.wwwroot,
@@ -81,6 +95,9 @@ export async function collect(client: MoodleClient, opts: CollectOptions): Promi
     posts,
     assignments,
     events,
+    ...(opts.grades ? { grades } : {}),
+    teachers,
+    myGroups,
     warnings: [...warnings],
   };
 }
@@ -521,6 +538,40 @@ async function getDiscussionPosts(
     return [...byId.values()];
   } catch (err) {
     warn(`discussion d=${discussionId} (HTML)`, err);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------- grades, teachers, groups
+
+async function getGrades(client: MoodleClient, course: Course, warn: Warn): Promise<GradeItem[]> {
+  try {
+    return parseGradeReport(await client.page(`/grade/report/user/index.php?id=${course.id}`), course.id);
+  } catch (err) {
+    warn(`grades ${course.shortname}`, err);
+    return [];
+  }
+}
+
+/** Teacher roles only (3 = Profesor, 4 = Profesor sin permiso de edición); parseTeachers drops anyone else. */
+async function getTeachers(client: MoodleClient, course: Course, warn: Warn): Promise<Teacher[]> {
+  const byName = new Map<string, Teacher>();
+  for (const roleid of [3, 4]) {
+    try {
+      const doc = await client.page(`/user/index.php?id=${course.id}&roleid=${roleid}&perpage=5000`);
+      for (const t of parseTeachers(doc, course.id)) if (!byName.has(t.name)) byName.set(t.name, t);
+    } catch (err) {
+      warn(`teachers ${course.shortname}`, err);
+    }
+  }
+  return [...byName.values()];
+}
+
+async function getMyGroups(client: MoodleClient, course: Course, warn: Warn): Promise<string[]> {
+  try {
+    return parseMyGroups(await client.page(`/user/view.php?course=${course.id}`));
+  } catch (err) {
+    warn(`groups ${course.shortname}`, err);
     return [];
   }
 }

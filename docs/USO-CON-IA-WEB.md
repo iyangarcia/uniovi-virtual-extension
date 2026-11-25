@@ -96,29 +96,29 @@ Si algo no sale bien, la extensión te lo dice y puedes usar la forma manual.
 2. Pégalo en tu IA como **conector personalizado**:
 
 **Claude (claude.ai)**
-1. Menú de tu cuenta → **Personalizar** (*Customize*) → **Conectores** (*Connectors*).
-2. **Añadir** → **Añadir conector personalizado** (*Add custom connector*).
+1. Ve a **Plugins** (también se llega desde **Personalizar → Conectores**).
+2. **Add** → **Add custom connector** (en español: **Añadir** → **Añadir conector personalizado**).
 
-![Conectores de Claude, botón Añadir conector personalizado](img/claude-1-conectores.png)
+![Menú Add de Claude con Add custom connector](img/claude-1-conectores.png)
 
-3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Pulsa **Añadir**.
+3. Nombre: `Uniovi Virtual`. URL: pega el enlace. Pulsa **Continue** (o **Añadir** si Claude está en español).
 
-![Formulario de Claude con el nombre y el enlace](img/claude-2-formulario.png)
+![Ventana Add custom connector con el nombre y el enlace tapado](img/claude-2-formulario.png)
 
 4. En un chat nuevo, comprueba que Uniovi Virtual está activado en el menú de herramientas.
 
 En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro, tendrás que quitarlo para añadir este.
 
 **ChatGPT (también gratis)**
-1. Ve a <https://chatgpt.com/plugins> y pulsa **+**.
-2. Elige **Añadir servidor MCP personalizado** (*Add custom MCP server*).
+1. Ve a <https://chatgpt.com/plugins> y pulsa **Añadir**.
+2. Elige **Añadir servidor MCP personalizado**.
 
-![Menú + de ChatGPT con Add custom MCP server](img/chatgpt-1-menu.png)
+![Menú Añadir de ChatGPT con Añadir servidor MCP personalizado](img/chatgpt-1-menu.png)
 
-3. Nombre: `Uniovi Virtual`. URL: pega el enlace.
-4. Marca la casilla de que confías en la aplicación y pulsa **Crear** (*Create*).
+3. Nombre: `Uniovi Virtual`. En **URL del servidor**: pega el enlace.
+4. Marca **Lo entiendo y quiero continuar** y pulsa **Crear como complemento**.
 
-![Formulario de ChatGPT con nombre, enlace y la casilla de confianza](img/chatgpt-2-formulario.png)
+![Formulario de ChatGPT con el nombre, el enlace tapado y la casilla Lo entiendo y quiero continuar](img/chatgpt-2-formulario.png)
 
 5. En el chat, elige Uniovi Virtual en el menú **+**.
 
@@ -126,17 +126,17 @@ En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro,
 
 Es la opción más avanzada: todo está en inglés y hay tres pantallas. Con **Conectar automáticamente** la extensión hace casi todo; solo te deja a ti marcar el aviso y pulsar **Connect**.
 1. Ve a <https://gemini.google.com/devmode> y pulsa **Create new**.
-2. Pega el enlace en **MCP Server URL** y pulsa **Next**.
+2. Pega el enlace en **MCP server URL** y pulsa **Next**.
 
-![Gemini: campo MCP Server URL con el enlace](img/gemini-1-url.png)
+![Gemini: ventana Connect to an MCP server con el enlace tapado](img/gemini-1-url.png)
 
-3. Lee el aviso de riesgo, **márcalo** y pulsa **Connect**.
+3. Lee el aviso, marca **I understand and accept…** y pulsa **Connect**.
 
-![Gemini: aviso de riesgo y botón Connect](img/gemini-2-aviso.png)
+![Gemini: casilla I understand and accept y botón Connect](img/gemini-2-aviso.png)
 
-4. Nombre: `Uniovi Virtual` (con la forma automática ya está escrito). Pulsa **Connect**.
+4. En **App name** escribe `Uniovi Virtual` (con la forma automática ya está escrito). Debajo verás la lista de lo que puede consultar. Pulsa **Connect**.
 
-![Gemini: nombre Uniovi Virtual y botón Connect](img/gemini-3-nombre.png)
+![Gemini: ventana Save your custom app con el nombre Uniovi Virtual](img/gemini-3-nombre.png)
 
 5. En un chat normal escribe `@Uniovi Virtual` y tu pregunta. Cuando pregunte si puede usarlo, responde **Permitir siempre**.
 

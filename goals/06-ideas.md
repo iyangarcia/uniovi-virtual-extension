@@ -152,3 +152,63 @@ Gemini can't share connectors, and its directory isn't open to us. Options, simp
    - Costs: the Google Drive permission (`identity` + Drive scope), and files are copies, so they need re-sync.
    - Simpler first step: «Descargar asignatura» as a zip, for uploading to NotebookLM or Gemini by hand.
 3. **Wait for Google's Connected Apps** to open outside the US, then submit the OAuth URL there as well.
+
+## 6. Search inside files (RAG): send passages, not whole documents
+
+**Problem.** To answer a question, the AI reads whole files with `read_material`, up to 40,000 characters a
+call. That is slow, and it uses up the free plans: Gemini's ran out after a few questions. Often the
+answer is in one or two paragraphs.
+
+### Step 1: word search over pieces (simple, no new downloads)
+
+**Split.** Cut each file's extracted text into pieces of about one page. Keep the file key, the name, the
+course, and the page or slide number (from the existing `--- page N ---` / `--- slide N ---` markers).
+
+**Tool.** New `find_passages` (read-only):
+- **Input:** `query`, plus an optional course filter.
+- **Output:** the 3–5 best pieces, each with its file, page and a short text.
+
+**Ranking.**
+- **Method:** BM25 (word matching, as search engines do).
+- **Normalizing:** words are compared without accents or capitals, so "prescripcion" finds "Prescripción".
+  Very common Spanish words are ignored.
+
+**Where it runs.**
+- Inside the shared MCP core (`shared/mcp/`), over the text the extension already stores, behind the
+  `DataStore` interface, so the dev server gets it too.
+- No new libraries.
+- The index is built when needed and cached per store (like the existing WeakMap state), and rebuilt when
+  files change.
+
+**Instructions.** Server instructions say "use `find_passages` first; use `read_material` only when you need
+the whole document". Citations stay "(file name, page N)".
+
+**Size.** Maybe a day of work.
+
+### Step 2: search by meaning (later, only if step 1 falls short)
+
+**Idea.** Find passages by meaning, not only exact words, so that "usucapión" also finds "prescripción
+adquisitiva".
+
+**How.**
+- A small multilingual embedding model (about 25–100 MB) running in the student's browser (WebGPU/WASM), so
+  the data still never leaves the computer.
+- Vectors stored in IndexedDB next to the texts.
+- Results mixed with the BM25 ones.
+
+**Costs.**
+- A one-time download.
+- A slower first indexing.
+- A bigger extension or a download on first use.
+- MV3 limits: no dynamic `import()` in the service worker, so this may need an offscreen document.
+
+### How to check it works
+
+Write about 10 real questions with known answers (for example "¿qué dice el tema 3 sobre…?",
+"¿cuándo es el examen de…?"). Compare before and after:
+- whether the answer is right and cites the right page;
+- how many characters were sent to the AI.
+
+Use fixture data or the dev server with a temp `UNIOVI_DATA_DIR`, never real data on a public relay.
+
+**Order.** After §4 (cheaper answers, about 1 hour), and after the pilot.

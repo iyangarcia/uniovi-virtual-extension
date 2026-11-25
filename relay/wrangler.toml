@@ -4,6 +4,12 @@ main = "src/index.ts"
 compatibility_date = "2026-11-01"
 workers_dev = true
 
+# The connector icon (src/index.ts imports extension/icons/icon128.png as an ArrayBuffer).
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
+fallthrough = true
+
 [[durable_objects.bindings]]
 name = "AGENTS"
 class_name = "AgentRoom"

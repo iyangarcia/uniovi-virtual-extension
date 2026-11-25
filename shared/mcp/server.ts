@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Snapshot } from "../types.ts";
 import { findDates } from "../dates.ts";
+import { RELAY_URL } from "../relay.ts";
+import { DOWNLOAD_PAGE } from "../release.ts";
 import { fmt, fold, matchCourses, nowUnix, requireSnapshot as loadRequired, UserError, when } from "./common.ts";
 import { textOf } from "./extract.ts";
 import { hitFile, searchAll, searchMaterials } from "./search.ts";
@@ -45,7 +47,17 @@ export interface McpOptions {
 }
 
 export function createMcpServer(store: DataStore, { remote = false, version = "0.0.0" }: McpOptions = {}): McpServer {
-  const server = new McpServer({ name: "uniovi-virtual", version }, { instructions: INSTRUCTIONS });
+  const server = new McpServer(
+    {
+      name: "uniovi-virtual",
+      title: "Uniovi Virtual",
+      version,
+      // Shown by AI sites next to the connector, so it doesn't look like a nameless black box.
+      icons: [{ src: `${RELAY_URL}/icon.png`, mimeType: "image/png", sizes: ["128x128"] }],
+      websiteUrl: DOWNLOAD_PAGE,
+    },
+    { instructions: INSTRUCTIONS },
+  );
   const local = <T>(v: T): T | undefined => (remote ? undefined : v);
   /** Absolute local path of a file: only in local mode, and only for a store that has one (the Node server). */
   const pathOf = (f: StoredFile): string | undefined => (remote ? undefined : store.localPath?.(f));

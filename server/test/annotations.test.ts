@@ -19,5 +19,9 @@ test("every tool is annotated read-only and non-destructive", async () => {
     assert.equal(t.annotations?.readOnlyHint, true, t.name);
     assert.equal(t.annotations?.destructiveHint, false, t.name);
   }
+  // AI sites show the server's title and icon next to the connector.
+  const info = client.getServerVersion();
+  assert.equal(info?.title, "Uniovi Virtual");
+  assert.equal(info?.icons?.[0]?.src, "https://uniovi-relay.iyangarcias.workers.dev/icon.png");
   await client.close();
 });

@@ -3,6 +3,8 @@
 // /mcp/<id>/... HTTP request over it. It stores nothing but sha256(secret) and logs no bodies or paths.
 
 import { DurableObject } from "cloudflare:workers";
+// The extension's 128 px icon, bundled as bytes (wrangler.toml rule "Data" for *.png).
+import ICON from "../../extension/icons/icon128.png";
 import {
   MAX_INFLIGHT,
   NOT_CONNECTED_BODY,
@@ -49,6 +51,8 @@ export default {
     switch (r.kind) {
       case "health":
         return text(200, "Uniovi Virtual relay");
+      case "icon":
+        return new Response(ICON, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
       case "agent":
         if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return text(426, "Expected WebSocket");
         return env.AGENTS.get(env.AGENTS.idFromName(r.id)).fetch(request);

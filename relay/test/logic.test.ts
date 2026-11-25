@@ -29,6 +29,9 @@ const SECRET = "a".repeat(43);
 test("route: health, agent, mcp", () => {
   assert.deepEqual(route("GET", "/", ""), { kind: "health" });
   assert.deepEqual(route("HEAD", "/", ""), { kind: "health" });
+  assert.deepEqual(route("GET", "/icon.png", ""), { kind: "icon" });
+  assert.deepEqual(route("GET", "/favicon.ico", ""), { kind: "icon" });
+  assert.deepEqual(route("POST", "/icon.png", ""), { kind: "not-found" });
   assert.deepEqual(route("POST", "/", ""), { kind: "not-found" });
   assert.deepEqual(route("GET", `/agent/${ID}`, ""), { kind: "agent", id: ID });
   assert.deepEqual(route("POST", `/agent/${ID}`, ""), { kind: "not-found" });

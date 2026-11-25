@@ -24,13 +24,17 @@ export const HELLO_TIMEOUT_MS = 10_000;
 
 export type Route =
   | { kind: "health" }
+  | { kind: "icon" }
   | { kind: "agent"; id: string }
   | { kind: "mcp"; id: string; /** "/<rest>" plus the query string, as forwarded in RelayRequest.path. */ path: string }
   | { kind: "not-found" };
 
 /** Maps a request to a route. `pathname` is the raw (still percent-encoded) URL path; `search` includes "?". */
 export function route(method: string, pathname: string, search: string): Route {
-  if (pathname === "/") return method === "GET" || method === "HEAD" ? { kind: "health" } : { kind: "not-found" };
+  const read = method === "GET" || method === "HEAD";
+  if (pathname === "/") return read ? { kind: "health" } : { kind: "not-found" };
+  // The connector icon: AI sites show it next to the connector (MCP serverInfo.icons, or the domain favicon).
+  if (pathname === "/icon.png" || pathname === "/favicon.ico") return read ? { kind: "icon" } : { kind: "not-found" };
   const agent = /^\/agent\/([^/]+)$/.exec(pathname);
   if (agent) {
     const id = agent[1]!;

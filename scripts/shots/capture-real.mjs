@@ -84,10 +84,11 @@ try {
           const v = swap(t.nodeValue);
           if (v !== t.nodeValue) t.nodeValue = v;
         }
-        for (const el of root.querySelectorAll("[aria-label], [title], [alt], [placeholder], [value], [href]")) {
-          for (const a of ["aria-label", "title", "alt", "placeholder", "value", "href"]) {
-            const v = el.getAttribute(a);
-            if (v != null && swap(v) !== v) el.setAttribute(a, swap(v));
+        // Every attribute (aria-label, title, value, href, data-*, <meta content>…): the audit reads them all.
+        for (const el of root.querySelectorAll("*")) {
+          for (const { name, value } of [...el.attributes]) {
+            const v = swap(value);
+            if (v !== value) el.setAttribute(name, v);
           }
         }
         // Avatars: images and background images inside header / account / profile controls.

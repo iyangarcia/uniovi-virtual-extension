@@ -39,7 +39,7 @@ export interface SearchResult {
   text?: string;
 }
 
-export async function searchAll(store: DataStore, s: Snapshot, query: string, limit = 20): Promise<SearchResult[]> {
+export async function searchAll(store: DataStore, s: Snapshot, query: string, limit = 10): Promise<SearchResult[]> {
   const out: SearchResult[] = [];
   const { results } = await searchMaterials(store, { snapshot: s, query, limit: limit * 3 });
   const seen = new Set<string>();

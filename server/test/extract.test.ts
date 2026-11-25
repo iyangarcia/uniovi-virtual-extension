@@ -125,7 +125,8 @@ const read = async (c: Client, args: Record<string, unknown>) => {
   return { out: text(r), isError: (r as { isError?: boolean }).isError === true };
 };
 
-const body = (out: string) => out.slice(out.indexOf("\n\n") + 2);
+/** The page text: after the header, before the "[N more chars: ...]" trailer. */
+const body = (out: string) => out.slice(out.indexOf("\n\n") + 2).replace(/\n\n\[\d+ more chars: call read_material with offset \d+ to continue\.\]$/, "");
 
 test("read_material pages with offset/maxChars and nextOffset until the end", async () => {
   const c = await client();
@@ -134,6 +135,7 @@ test("read_material pages with offset/maxChars and nextOffset until the end", as
   const p1 = await read(c, { maxChars: 1000 });
   assert.match(p1.out, /chars 0-1000 of 2500 \(nextOffset: 1000\)/);
   assert.equal(body(p1.out), longText.slice(0, 1000));
+  assert.match(p1.out, /\[1500 more chars: call read_material with offset 1000 to continue\.\]$/);
 
   const p2 = await read(c, { offset: 1000, maxChars: 1000 });
   assert.match(p2.out, /chars 1000-2000 of 2500 \(nextOffset: 2000\)/);
@@ -141,10 +143,10 @@ test("read_material pages with offset/maxChars and nextOffset until the end", as
 
   const p3 = await read(c, { offset: 2000, maxChars: 1000 });
   assert.match(p3.out, /chars 2000-2500 of 2500\n/);
-  assert.doesNotMatch(p3.out, /nextOffset/);
+  assert.doesNotMatch(p3.out, /nextOffset|more chars/);
   assert.equal(body(p3.out), longText.slice(2000));
 
-  // Default maxChars (40000) returns everything at once.
+  // Default maxChars (15000) returns a short file at once.
   const all = await read(c, {});
   assert.match(all.out, /chars 0-2500 of 2500\n/);
   assert.equal(body(all.out), longText);

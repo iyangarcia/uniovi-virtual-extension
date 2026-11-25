@@ -13,8 +13,9 @@ import type { DataStore, StoredFile } from "./store.ts";
 // every tool, prompt and the instructions. Storage comes from a DataStore.
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
+// Compact JSON: every character of tool output counts against the AI's limits (free tiers run out fast).
 const ok = (data: unknown): ToolResult => ({
-  content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data, null, 1) }],
+  content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data) }],
 });
 const fail = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
 
@@ -33,6 +34,29 @@ function wrap<A>(fn: (args: A) => Promise<ToolResult>) {
     }
   };
 }
+
+/** read_material's default page: about 4k tokens, so one call doesn't eat a free tier's quota. */
+const READ_CHARS = 15_000;
+/** list_materials cap without a course/query filter. */
+const MAX_MATERIALS = 150;
+
+/** Office MIME types are ~70 characters each; list_materials prints the short name. */
+const SHORT_TYPES: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-powerpoint": "ppt",
+  "application/msword": "doc",
+  "application/vnd.ms-excel": "xls",
+};
+const shortType = (mime?: string) => (mime ? SHORT_TYPES[mime] ?? mime : undefined);
+
+/** First `max` characters of a message with whitespace runs collapsed, "…" when cut. */
+const excerpt = (s: string, max: number) => {
+  const flat = s.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+};
 
 const courseArg = z
   .string()
@@ -141,14 +165,14 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
             section: r.section,
             name: r.name,
             filename: r.filename ?? stored?.resource.filename,
-            type: r.modname === "url" ? "link" : r.mimetype ?? stored?.contentType,
+            type: r.modname === "url" ? "link" : shortType(r.mimetype ?? stored?.contentType),
             modified: r.timemodified ? when(r.timemodified) : undefined,
             localPath: stored ? pathOf(stored) : undefined,
             url: r.url,
           };
         });
-      if (items.length > 300) {
-        return ok({ note: `${items.length} matches; showing 300. Narrow with course/query.`, items: items.slice(0, 300) });
+      if (items.length > MAX_MATERIALS) {
+        return ok({ note: `${items.length} matches; showing ${MAX_MATERIALS}. Narrow with course/query.`, items: items.slice(0, MAX_MATERIALS) });
       }
       return ok(items);
     }),
@@ -164,10 +188,10 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       inputSchema: {
         key: z.string().describe("Material key from list_materials."),
         offset: z.number().int().min(0).optional().describe("Character offset to start from (default 0)."),
-        maxChars: z.number().int().min(1000).max(200_000).optional().describe("Max characters to return (default 40000)."),
+        maxChars: z.number().int().min(1000).max(200_000).optional().describe("Max characters to return (default 15000)."),
       },
     },
-    wrap(async ({ key, offset = 0, maxChars = 40_000 }: { key: string; offset?: number; maxChars?: number }) =>
+    wrap(async ({ key, offset = 0, maxChars = READ_CHARS }: { key: string; offset?: number; maxChars?: number }) =>
       ok(await materialText(store, key, offset, maxChars, pathOf)),
     ),
   );
@@ -182,10 +206,10 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       inputSchema: {
         query: z.string().min(2).describe("Words to search for (all must appear on the same line or nearby)."),
         course: courseArg,
-        limit: z.number().int().min(1).max(100).optional().describe("Max snippets (default 30)."),
+        limit: z.number().int().min(1).max(100).optional().describe("Max snippets (default 10)."),
       },
     },
-    wrap(async ({ query, course, limit = 30 }: { query: string; course?: string; limit?: number }) => {
+    wrap(async ({ query, course, limit = 10 }: { query: string; course?: string; limit?: number }) => {
       const s = await requireSnapshot();
       const found = await searchMaterials(store, { snapshot: s, query, course, limit });
       const { scanned, pending } = found;
@@ -307,10 +331,10 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
         query: z.string().optional().describe("Words that must all appear in the subject or message (accent-insensitive)."),
         course: courseArg,
         sinceDays: z.number().int().min(1).optional().describe("Only posts from the last N days."),
-        limit: z.number().int().min(1).max(200).optional().describe("Max posts (default 30)."),
+        limit: z.number().int().min(1).max(200).optional().describe("Max posts (default 15)."),
       },
     },
-    wrap(async ({ query, course, sinceDays, limit = 30 }: { query?: string; course?: string; sinceDays?: number; limit?: number }) => {
+    wrap(async ({ query, course, sinceDays, limit = 15 }: { query?: string; course?: string; sinceDays?: number; limit?: number }) => {
       const s = await requireSnapshot();
       const ids = new Set(matchCourses(s, course).map((c) => c.id));
       const terms = query ? fold(query).split(/\s+/).filter(Boolean) : [];
@@ -330,7 +354,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
           subject: p.subject,
           author: p.author,
           posted: when(p.created),
-          excerpt: p.message.slice(0, 400) + (p.message.length > 400 ? "…" : ""),
+          excerpt: excerpt(p.message, 300),
           url: p.url,
         }));
       return ok(posts.length ? posts : "No matching posts.");
@@ -382,7 +406,9 @@ async function materialText(
   const slice = text.slice(offset, offset + maxChars);
   const next = offset + slice.length < text.length ? offset + slice.length : undefined;
   const where = localPath === undefined ? `url: ${f.resource.url}` : `localPath: ${localPath}`;
-  return `# ${f.resource.name} — ${f.resource.filename}\n${where}\nchars ${offset}-${offset + slice.length} of ${text.length}${next !== undefined ? ` (nextOffset: ${next})` : ""}\n\n${slice}`;
+  // The trailer is what the AI reads last: without it, a cut-off page looks like the whole document.
+  const more = next !== undefined ? `\n\n[${text.length - next} more chars: call read_material with offset ${next} to continue.]` : "";
+  return `# ${f.resource.name} — ${f.resource.filename}\n${where}\nchars ${offset}-${offset + slice.length} of ${text.length}${next !== undefined ? ` (nextOffset: ${next})` : ""}\n\n${slice}${more}`;
 }
 
 function threadText(s: Snapshot, id: number): string {
@@ -400,7 +426,7 @@ function threadText(s: Snapshot, id: number): string {
 // {results: [{id, title, url}]}, `fetch` takes one of those ids and returns {id, title, text, url, metadata}.
 // Ids are "material:<key>" (one per file, best hit first) and "post:<id>".
 
-const FETCH_CHARS = 60_000;
+const FETCH_CHARS = READ_CHARS;
 
 export async function fetchById(store: DataStore, s: Snapshot, id: string) {
   const [kind, ...rest] = id.split(":");
@@ -414,7 +440,7 @@ export async function fetchById(store: DataStore, s: Snapshot, id: string) {
     const r = s.resources.find((x) => x.key === ref);
     const body = await materialText(store, ref, 0, FETCH_CHARS, () => undefined);
     const text = typeof body === "string" ? body : JSON.stringify(body);
-    return { id, title: r?.name ?? ref, text, url: r?.url ?? "", metadata: { course: s.courses.find((c) => c.id === r?.courseId)?.shortname, section: r?.section, note: "Use read_material with nextOffset for the rest of long files." } };
+    return { id, title: r?.name ?? ref, text, url: r?.url ?? "", metadata: { course: s.courses.find((c) => c.id === r?.courseId)?.shortname, section: r?.section, note: `Use read_material (key ${JSON.stringify(ref)}) with nextOffset for the rest of long files.` } };
   }
   throw new UserError(`Unknown id "${id}". Use ids returned by search.`);
 }
@@ -451,14 +477,15 @@ function registerSearchFetch(server: McpServer, store: DataStore) {
 // Web clients (ChatGPT, Gemini) don't show MCP prompts, so the same guidance goes in the server instructions.
 const INSTRUCTIONS = `Read-only access to one University of Oviedo student's Uniovi Virtual (Moodle) data, synced from their browser: courses, course materials (slides, PDFs, notes, with extracted text), forum announcements, assignment deadlines, calendar events, and exam dates detected in announcements.
 
-How to use it well:
-- Start with sync_status if results look empty or stale; data is as fresh as the student's last sync.
-- "What do I have this week?": get_deadlines (daysAhead 14) + get_exam_dates (includeDeadlines true) merged chronologically, then search_forums (sinceDays 7) for new announcements, then a prioritised 7-day plan.
-- Preparing an exam: get_exam_dates for the course, search_forums with query "examen" and get_forum_post to learn format and covered topics, then list_materials and read_material (follow nextOffset) for those topics; produce a study plan, condensed notes and practice questions.
-- Studying a topic: list_materials with the topic as query (or search_materials to find where it is covered), read_material, then summary, key concepts, flashcards and a short quiz.
-- search/fetch search materials and forum posts together.
+Be economical: every tool result counts against the student's AI limits. Use the fewest calls that answer the question, pass a course filter when you know it, and don't call a tool again for data already in this conversation.
+- Questions about content: search_materials first (short snippets with file and page/slide); often the snippets answer it. Then read_material only for the file you need: it returns about 15,000 characters per call, so follow nextOffset only if the part you need isn't there yet.
+- Summaries, notes, flashcards or quizzes on a topic: snippets are not enough. Find the file (list_materials with the topic as query, or search_materials), then read_material it whole, following nextOffset.
+- "What do I have this week?": get_deadlines (daysAhead 7) for assignments and calendar events, plus get_exam_dates (includeDeadlines true) for dates announced in the forums. Add search_forums (sinceDays 7) only if the student asks for news.
+- Exams: get_exam_dates for the course; for format or topics, search_forums (query "examen") and get_forum_post only on the relevant post.
+- search/fetch (materials and forum posts together) are for clients that need them; fetch returns long text, so prefer search_materials and read_material.
+- If results look empty or stale, call sync_status; data is as fresh as the student's last sync.
 
-Rules: work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;
+Rules: read-only. Work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;
 
 // ---------------------------------------------------------------- study prompts
 // Ready-made workflows, shown by Claude Code / Claude Desktop as slash commands, so the

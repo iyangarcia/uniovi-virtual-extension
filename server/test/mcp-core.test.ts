@@ -231,8 +231,8 @@ test("MCP round trip: tools listed, version passed, local paths only in local mo
 
   const local = await connect(store, false);
   try {
-    assert.match(text(await local.callTool({ name: "list_materials", arguments: {} })), /"localPath": "\/data\/files\/FIS\/Tema 1\/notas.txt"/);
-    assert.match(text(await local.callTool({ name: "sync_status", arguments: {} })), /"dataDir": "\/data"/);
+    assert.match(text(await local.callTool({ name: "list_materials", arguments: {} })), /"localPath":"\/data\/files\/FIS\/Tema 1\/notas.txt"/);
+    assert.match(text(await local.callTool({ name: "sync_status", arguments: {} })), /"dataDir":"\/data"/);
     assert.match(text(await local.callTool({ name: "read_material", arguments: { key: "1:/notas.txt" } })), /localPath: \/data\/files/);
   } finally {
     await local.close();
@@ -245,5 +245,76 @@ test("MCP round trip: tools listed, version passed, local paths only in local mo
     assert.match(text(await ext.callTool({ name: "read_material", arguments: { key: "4:/datos.bin" } })), /https:\/\/campus\/r\/4/);
   } finally {
     await ext.close();
+  }
+});
+
+test("tool output is compact JSON, with short file types", async () => {
+  const c = await connect(memoryStore().store, true);
+  try {
+    const out = text(await c.callTool({ name: "list_materials", arguments: {} }));
+    assert.doesNotMatch(out, /\n|": /, "no indentation or spacing");
+    const items = JSON.parse(out) as Array<{ key: string; type?: string }>;
+    assert.deepEqual(
+      items.map((i) => i.type),
+      ["text/plain", "pptx", "docx", "application/octet-stream"],
+    );
+    assert.doesNotMatch(text(await c.callTool({ name: "sync_status", arguments: {} })), /\n/);
+  } finally {
+    await c.close();
+  }
+});
+
+test("read_material returns 15000 chars by default and says how to continue", async () => {
+  const long = Array.from({ length: 4000 }, (_, i) => `linea ${i}`).join("\n");
+  const r = resource(9, 1, "Tema 9", "largo.txt");
+  const f: StoredFile = { key: r.key, path: "files/FIS/Tema 9/largo.txt", size: long.length, contentType: "text/plain", timemodified: 1, storedAt: 1, resource: r };
+  const store: DataStore = {
+    snapshot: async () => ({ ...snap, resources: [r] }),
+    index: async () => ({ [r.key]: f }),
+    bytes: async () => strToU8(long),
+    readText: async () => null,
+    writeText: async () => {},
+  };
+  const c = await connect(store, true);
+  try {
+    const out = text(await c.callTool({ name: "read_material", arguments: { key: r.key } }));
+    assert.ok(out.includes(`chars 0-15000 of ${long.length} (nextOffset: 15000)`));
+    const page = out.slice(out.indexOf("\n\n") + 2);
+    assert.ok(page.startsWith(long.slice(0, 15000)));
+    assert.ok(page.endsWith(`\n\n[${long.length - 15000} more chars: call read_material with offset 15000 to continue.]`));
+    assert.ok(out.length < 15_300);
+    // The next page continues where the first stopped; fetch is capped the same way.
+    assert.match(text(await c.callTool({ name: "read_material", arguments: { key: r.key, offset: 15000 } })), /chars 15000-30000 of/);
+    const fetched = JSON.parse(text(await c.callTool({ name: "fetch", arguments: { id: `material:${r.key}` } }))) as { text: string };
+    assert.match(fetched.text, /nextOffset: 15000/);
+  } finally {
+    await c.close();
+  }
+});
+
+test("search_forums: 15 posts by default, excerpts flattened and cut at 300 chars", async () => {
+  const body = `Primera línea\n\n${"x".repeat(500)}`;
+  const posts = Array.from({ length: 20 }, (_, i) => ({
+    id: i + 1,
+    discussionId: i + 1,
+    courseId: 1,
+    forumName: "Avisos",
+    subject: `Aviso ${i + 1}`,
+    author: "Profe",
+    created: snap.syncedAt - i * 60,
+    message: body,
+    url: `https://campus/d/${i + 1}`,
+  }));
+  const store: DataStore = { ...memoryStore().store, snapshot: async () => ({ ...snap, posts } as Snapshot) };
+  const c = await connect(store, true);
+  try {
+    const list = JSON.parse(text(await c.callTool({ name: "search_forums", arguments: {} }))) as Array<{ id: number; excerpt: string; url: string }>;
+    assert.equal(list.length, 15);
+    assert.equal(list[0]!.id, 1);
+    assert.equal(list[0]!.url, "https://campus/d/1");
+    assert.equal(list[0]!.excerpt, `Primera línea ${"x".repeat(286)}…`);
+    assert.equal(JSON.parse(text(await c.callTool({ name: "search_forums", arguments: { limit: 20 } }))).length, 20);
+  } finally {
+    await c.close();
   }
 });

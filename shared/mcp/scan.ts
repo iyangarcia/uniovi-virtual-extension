@@ -98,13 +98,39 @@ export async function scanMaterials(
           location,
           locationKind,
           locationNumber,
-          snippet: lines.slice(Math.max(0, i - 1), i + 3).join(" ").replace(/\s+/g, " ").slice(0, 400),
+          snippet: snippetAt(lines, i, terms),
         });
       }
     }
     if (results.length >= limit) break;
   }
   return { results, scanned: files.length, pending, files };
+}
+
+/** Max snippet length: every search result counts against the AI's limits, so keep it short. */
+export const SNIPPET_CHARS = 240;
+
+const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * The text around hit line i (one line before, two after), at most SNIPPET_CHARS long and
+ * cut so the first matched term stays in it, with some context before it.
+ */
+function snippetAt(lines: string[], i: number, terms: string[]): string {
+  const prev = i > 0 ? squash(lines[i - 1]!) : "";
+  const hit = squash(lines[i]!);
+  const after = squash(lines.slice(i + 1, i + 3).join(" "));
+  const text = [prev, hit, after].filter(Boolean).join(" ");
+  if (text.length <= SNIPPET_CHARS) return text;
+  // Column of the first matched term in the squashed hit line (fold can change lengths, so map back char by char).
+  const folded = fold(hit);
+  const cols = terms.map((t) => folded.indexOf(t)).filter((c) => c >= 0);
+  const foldedCol = cols.length ? Math.min(...cols) : 0;
+  let col = 0;
+  for (let f = 0; col < hit.length && f < foldedCol; col++) f += fold(hit[col]!).length;
+  const pos = (prev ? prev.length + 1 : 0) + col;
+  const start = Math.max(0, Math.min(pos - 60, text.length - SNIPPET_CHARS));
+  return text.slice(start, start + SNIPPET_CHARS).trim();
 }
 
 /** Search over already-extracted text only; files without cached text count as `pending`. */

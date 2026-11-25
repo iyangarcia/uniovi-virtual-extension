@@ -77,6 +77,17 @@ the $5), upload, and answer the review (usually a few days).
 
 ## 4. Cheaper answers per question (Gemini's free quota ran out after a few questions)
 
+**Done (2026-11-25).** Measured with `node scripts/measure-output.ts` (fixture data): 80,781 → 40,885 characters for a
+typical question set (-49%). The main changes:
+- compact JSON;
+- `read_material` and `fetch` return 15,000 characters per call, plus a "call again with offset" trailer;
+- `search_materials` returns 10 results by default, with 240-character snippets;
+- `search_forums` returns 15 results by default, with 300-character excerpts;
+- `list_materials` returns at most 150;
+- shorter instructions that ask for the fewest calls.
+Next targets: `get_exam_dates` and `search_forums` repeat whole forum messages (about 6k characters each). `fetch` is now
+15k, so search/fetch-only clients (ChatGPT deep research) see less of a long file.
+
 Every tool call's output counts against the AI's limits. Ideas:
 - `read_material` default 40,000 → about 15,000 characters (the AI pages with `offset`);
 - compact JSON (no indentation);

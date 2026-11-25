@@ -8,11 +8,13 @@
 <script>
 later(1200, () => {
   app.innerHTML = `
-    <nav><a href="#">Chats</a><a href="#">Plugins</a></nav>
+    <nav><a href="#">Chats</a><a href="#">Plugins</a><a href="#c/1" id="pastChat">Add custom MCP</a></nav>
     <h1>Plugins</h1>
     <input type="search" placeholder="Search plugins">
     <button id="plus" aria-label="Add">+</button>
     <div id="menu" role="menu" hidden><div role="menuitem" tabindex="0" id="mcpItem">Add custom MCP server</div></div>`;
+  // A past chat in the sidebar whose title matches the step text (seen live): never opened.
+  pastChat.onclick = (e) => { e.preventDefault(); window.__decoyClicks = (window.__decoyClicks || 0) + 1; };
   plus.onclick = () => later(200, () => (menu.hidden = false));
   mcpItem.onclick = () => {
     menu.hidden = true;

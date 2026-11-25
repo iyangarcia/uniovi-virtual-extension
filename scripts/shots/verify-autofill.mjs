@@ -71,8 +71,8 @@ try {
   // Claude and ChatGPT: one screen, name + URL, the confirm button untouched.
   for (const ai of ["claude", "chatgpt"]) {
     const { tab, outcome, card, page } = await runFill(ai, `${ai}.html`);
-    check(outcome === "ok" && page.state.url === link && page.state.name === "Uniovi Virtual" && page.confirmClicks === 0 && /revisa los datos/.test(card),
-      `${ai}: name + URL filled, confirm not clicked (${page.confirmClicks}), card "${card}"`);
+    check(outcome === "ok" && page.state.url === link && page.state.name === "Uniovi Virtual" && page.confirmClicks === 0 && !page.decoyClicks && /revisa los datos/.test(card),
+      `${ai}: name + URL filled, confirm not clicked (${page.confirmClicks}), sidebar decoys ${page.decoyClicks ?? 0}, card "${card}"`);
     await tab.close();
   }
 

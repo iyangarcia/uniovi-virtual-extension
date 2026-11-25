@@ -31,17 +31,17 @@ const CARDS: Record<AiId, CardText> = {
     plan: "Funciona con el plan gratuito (permite 1 conector personalizado).",
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
-      "En Claude: Personalizar → Conectores → Añadir conector personalizado.",
+      "En claude.ai: Plugins (o Personalizar → Conectores) → «Add» → «Add custom connector».",
       "Nombre: Uniovi Virtual. URL: pega el enlace (Ctrl+V).",
-      "Pulsa «Añadir».",
+      "Pulsa «Continue» (o «Añadir» si Claude está en español).",
     ],
-    ok: "✓ Listo: en la pestaña de Claude revisa los datos y pulsa tú «Añadir».",
+    ok: "✓ Listo: en la pestaña de Claude revisa los datos y pulsa tú «Continue» (o «Añadir»).",
   },
   chatgpt: {
     plan: "Funciona también con el plan gratuito.",
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
-      "En chatgpt.com/plugins pulsa «+» → «Add custom MCP server».",
+      "En chatgpt.com/plugins pulsa «Añadir» → «Añadir servidor MCP personalizado» (en inglés: «Add» → «Add custom MCP server»).",
       "Nombre: Uniovi Virtual. URL: pega el enlace (Ctrl+V).",
       "Marca que confías en la aplicación y pulsa el botón para crearla.",
     ],

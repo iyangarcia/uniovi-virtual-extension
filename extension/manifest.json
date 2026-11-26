@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Uniovi Virtual",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnBmQsxWb6hitDhCnte8YZdb55mGX2cDiIvpFU8shDNNuiumg3FkrvVLGI86a3OKuxy4D/U7v1JqtOY6uYrCMModNuFubClN10cRjaB/5hhD5Ou9zdZYGq+he2P+ytxi5pLXbGBNK0g5UyvtZ72zHK2I/PyeINUwMffXpGqysPGBlZ3Rs07Hbquw+TSfCeLDsCyTkQTjByVZOHvgBQnSh++aGHV383mOtX+GAc+MB0wsx+rfJaQMNekOUsv/gQ6oZn/oYxFeAtbxK3fJfhPohY1hh4Q2krsnuGbpX5vHhAg4p32oKQcUBX3ChFZBfBjAsE+EE1t/u5kCNK6oSRBFNQwIDAQAB",
   "description": "Tus próximos exámenes, entregas y avisos del Campus Virtual, y tus apuntes para tu IA.",
   "permissions": [

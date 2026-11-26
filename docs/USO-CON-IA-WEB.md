@@ -126,7 +126,7 @@ En el plan gratuito solo cabe **un** conector personalizado. Si ya tenías otro,
 **Gemini (Modo desarrollador)**
 
 Es la opción más avanzada: todo está en inglés y hay tres pantallas. Con **Conectar automáticamente** la extensión hace casi todo; solo te deja a ti marcar el aviso y pulsar **Connect**.
-1. Ve a <https://gemini.google.com/devmode> y pulsa **Create new**.
+1. Ve a <https://gemini.google.com/devmode?hl=en> (con `?hl=en` al final: si tu Google está en español, sin eso te lleva al chat normal) y pulsa **Create new**.
 2. Pega el enlace en **MCP server URL** y pulsa **Next**.
 
 ![Gemini: ventana Connect to an MCP server con el enlace tapado](img/gemini-1-url.png)

@@ -3,11 +3,14 @@
 <style>[role="dialog"] { position: fixed; top: 150px; left: 0; right: 0; margin: 0 auto; width: 560px; padding: 20px; border: 1px solid #999; background: #fff; }</style>
 </head>
 <body>
-<!-- Imitates gemini.google.com/devmode (2026, in English; DOM recorded live on 2026-11-25). One
+<!-- Imitates gemini.google.com/devmode (2026, in English; DOM recorded live on 2026-11-25, screens 0-1
+     re-checked on 2026-11-26). One
      dialog (Angular Material's mat-dialog-container[role=dialog]) stays open and swaps its content per
      screen. All buttons are plain <button> without a type, as on the real site.
-     Screen 0 (opens by itself): «Search apps» text field, Cancel, «Create new».
-     Screen 1: a <form> with an input type=url name=url labelled «MCP server URL» (aria-labelledby),
+     Screen 0 (opens by itself): «Choose an app», «Search apps» text field, the apps already added
+       (button role=option), Cancel, «Create new».
+     Screen 1: «Connect to an MCP server»; a <form> with an input type=url name=url id=mcp-url-input
+       labelled «MCP server URL» (label for=),
        «Additional settings» (role=button), Cancel and Next, enabled only by an input event.
      Screen 2: no form; a risk checkbox and Connect, enabled once it is ticked.
      Screen 3, 2 s after a real (trusted) Connect: «App name» (aria-label only), «See all 11», Cancel,
@@ -46,19 +49,21 @@ later(700, () => {
 
 function screen0() {
   screen(`
-    <h2>Apps</h2>
-    <input type="text" aria-label="Search apps" placeholder="Search apps">
-    <ul><li>No apps yet</li></ul>
+    <h2>Choose an app</h2>
+    <input type="text" placeholder="Search apps">
+    <div role="listbox"><button role="option" aria-label="Other app, " id="otherApp">Other app</button></div>
     <div class="actions"><button id="cancel">Cancel</button><button id="create">Create new</button></div>`);
+  $("otherApp").onclick = () => window.__decoyClicks++;
   $("create").onclick = () => later(300, screen1);
 }
 
 function screen1() {
   screen(`
-    <h2>Connect an app</h2>
+    <h2>Connect to an MCP server</h2>
     <form id="f1">
-      <div class="mat-form-field"><label id="lu">MCP server URL</label>
-        <input type="url" name="url" placeholder="https://your-app-link.com/mcp" aria-labelledby="lu"></div>
+      <div class="mat-form-field"><label for="mcp-url-input">MCP server URL</label>
+        <input type="url" placeholder="https://your-app-link.com/mcp" id="mcp-url-input" name="url"></div>
+      <div id="mcp-url-feedback">Make sure that your URL starts with https://</div>
       <div role="button" tabindex="0">Additional settings <span>Show more</span></div>
       <div class="actions"><button id="cancel">Cancel</button><button id="next" disabled>Next</button></div>
     </form>`);

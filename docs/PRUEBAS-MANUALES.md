@@ -69,7 +69,7 @@ On the real sites, logged in:
 - [ ] claude.ai: **Conectar automáticamente** asks for the claude.ai permission only at click time, opens the connector page and fills name + URL. Only the AI's own confirm button is left. Confirm → it works in a chat.
 - [ ] chatgpt.com: the same, on a free account (the student ticks the trust checkbox and presses Create).
 - [ ] Gemini (Developer Mode):
-  - [ ] Auto-fill opens `gemini.google.com/devmode`, clicks **Create new**, fills **MCP Server URL** and presses **Next**.
+  - [ ] Auto-fill opens `gemini.google.com/devmode?hl=en` (also with a Spanish Google account: without `hl=en` it redirects to `/app`), clicks **Create new**, fills **MCP Server URL** and presses **Next**.
   - [ ] The risk checkbox is left unticked for the student.
   - [ ] After the student's **Connect**, the name «Uniovi Virtual» is filled automatically (description left empty).
   - [ ] The extension never presses the final **Connect**.

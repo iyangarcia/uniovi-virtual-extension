@@ -1,7 +1,9 @@
 import type { AutofillSpec } from "./types.ts";
 
 // Gemini (2026): from Spain it works through Developer Mode, a wizard in English (checked by hand on
-// 2026-11-25): gemini.google.com/devmode opens a dialog («Search apps» + «Create new») → «Create new» → «MCP Server URL» → Next → a risk notice the
+// 2026-11-25, first screens re-checked 2026-11-26; with ?hl=es /devmode redirects to /app, so there is no
+// Spanish wizard to match): gemini.google.com/devmode opens a dialog («Choose an app»: «Search apps» +
+// «Create new») → «Create new» → «Connect to an MCP server»: «MCP server URL» → Next → a risk notice the
 // student ticks → Connect → Name (+ Description) → Connect. Auto-fill pastes the URL and presses Next
 // (`advance`); the notice and both Connects are hers. When the Name screen appears, a watcher fills it
 // (`nameLaterMs`). The US-only «Add a custom app» texts are kept as fallback.
@@ -11,7 +13,9 @@ export const gemini: AutofillSpec = {
   id: "gemini",
   label: "Gemini",
   origin: "https://gemini.google.com/*",
-  startUrl: "https://gemini.google.com/devmode",
+  // ?hl=en: with a Spanish Google account /devmode redirects to /app (checked live 2026-11-26); hl=en
+  // opens the English wizard for that page only, without changing the account language.
+  startUrl: "https://gemini.google.com/devmode?hl=en",
   steps: [
     {
       // «Create new» lives in a dialog that has a search field: only the exact texts may be clicked there.

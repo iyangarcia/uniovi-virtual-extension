@@ -1,42 +1,64 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>ChatGPT plugins (fixture)</title></head>
+<html lang="en"><head><meta charset="utf-8"><title>Plugins | ChatGPT (fixture)</title></head>
 <body>
-<!-- Imitates chatgpt.com/plugins (2026): an icon-only "+" button (aria-label) opens a menu with
-     "Add custom MCP server"; the dialog has a hidden icon file input, Name, Description, MCP Server URL, a native
-     Authentication select (OAuth by default) and a trust box. -->
+<!-- Imitates chatgpt.com/plugins in English as seen live on 2026-11-26 (free plan): «Add»
+     (aria-haspopup=menu, opens on pointerdown like Radix) shows a menu with «Create plugin», «Upload
+     plugin archive» and «Add custom MCP server»; the dialog is a <form> with a hidden PNG file input
+     (name=app-icon) and «Choose icon», labels that wrap Name / Description (optional), a «Connection»
+     fieldset with a «Server URL» / «Tunnel» toggle and an input type=url aria-label «Server URL», a
+     native «Authentication» select (OAuth by default; values OAUTH / NONE / MIXED), the trust
+     checkbox, Cancel and a submit «Create as a plugin». -->
 <div id="app"></div>
 <script src="common.js"></script>
 <script>
 later(1200, () => {
   app.innerHTML = `
-    <nav><a href="#">Chats</a><a href="#">Plugins</a><a href="#c/1" id="pastChat">Add custom MCP</a></nav>
+    <nav><a href="#">New chat</a><a href="#">Plugins</a><a href="#c/1" id="pastChat">Add custom MCP</a></nav>
     <h1>Plugins</h1>
+    <button>Plugins</button><button>Skills</button><a href="#">Settings</a>
+    <button id="add" aria-label="Add" aria-haspopup="menu">Add</button>
     <input type="search" placeholder="Search plugins">
-    <button id="plus" aria-label="Add">+</button>
-    <div id="menu" role="menu" hidden><div role="menuitem" tabindex="0" id="mcpItem">Add custom MCP server</div></div>`;
+    <div id="menu" role="menu" hidden>
+      <div role="menuitem" tabindex="0">Create plugin</div>
+      <div role="menuitem" tabindex="0">Upload plugin archive</div>
+      <div role="menuitem" tabindex="0" id="mcpItem">Add custom MCP server</div>
+    </div>`;
   // A past chat in the sidebar whose title matches the step text (seen live): never opened.
   pastChat.onclick = (e) => { e.preventDefault(); window.__decoyClicks = (window.__decoyClicks || 0) + 1; };
   // Like Radix on the real site: the menu opens on pointerdown; a bare el.click() does nothing.
-  plus.onpointerdown = () => later(200, () => (menu.hidden = false));
+  add.onpointerdown = () => later(200, () => (menu.hidden = false));
   mcpItem.onclick = () => {
     menu.hidden = true;
     const d = document.createElement("div");
     d.setAttribute("role", "dialog");
     d.innerHTML = `
-      <h2>New connector</h2>
-      <label>Name<input name="name" data-field="name"></label>
-      <label>Description <span>(optional)</span><textarea name="description" data-field="description"></textarea></label>
-      <label>MCP Server URL<input name="server_url" data-field="url"></label>
-      <label>Icon (optional) <input type="file" accept="image/png" id="icon" hidden></label>
-      <label>Authentication <select id="auth"><option>OAuth</option><option>No authentication</option><option>OAuth or no authentication</option></select></label>
-      <label><input type="checkbox"> I understand and want to continue</label>
-      <button data-confirm disabled>Create</button>`;
+      <form id="f">
+        <h2>Add custom MCP server</h2>
+        <div role="presentation"><input type="file" accept="image/png,.png" name="app-icon" id="icon" hidden>
+          <button type="button" aria-label="Choose icon"></button>
+          <span>Icon (optional)</span> PNG only. Best results at 256 x 256 px or larger. Max file size: 10 KB</div>
+        <label>Name<input data-field="name" placeholder="Custom Tool"></label>
+        <label>Description (optional)<textarea data-field="description" placeholder="Explain what it does in a few words"></textarea></label>
+        <fieldset><legend>Connection</legend>
+          <div role="group" aria-label="Connection"><button type="button" aria-pressed="true">Server URL</button><button type="button" aria-pressed="false" id="modeTunnel">Tunnel</button></div>
+          <input type="url" data-field="url" aria-label="Server URL" placeholder="https://example.com/mcp"></fieldset>
+        <label>Authentication<select id="auth"><option value="OAUTH">OAuth</option><option value="NONE">No authentication</option><option value="MIXED">OAuth or no authentication</option></select></label>
+        <button type="button">Advanced OAuth settings</button>
+        <label><input type="checkbox"> I understand and want to continue</label>
+        <button type="button">Cancel</button>
+        <button type="submit" data-confirm disabled>Create as a plugin</button>
+        <button type="button" aria-label="Close dialog"></button>
+      </form>`;
     document.body.append(d);
     bindForm(d);
+    d.querySelector("#f").addEventListener("submit", (e) => e.preventDefault());
     // Like the real form: OAuth by default, which our link cannot use.
-    window.__state.auth = auth.value;
-    auth.onchange = () => (window.__state.auth = auth.value);
+    const text = () => auth.options[auth.selectedIndex].textContent;
+    window.__state.auth = text();
+    auth.onchange = () => (window.__state.auth = text());
     icon.onchange = () => (window.__state.icon = icon.files[0] ? `${icon.files[0].type} ${icon.files[0].size}` : "");
+    // The Tunnel toggle would swap the URL field away: never pressed.
+    modeTunnel.onclick = () => (window.__decoyClicks = (window.__decoyClicks || 0) + 1);
   };
 });
 </script>

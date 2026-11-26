@@ -3,8 +3,10 @@ import type { AutofillSpec } from "./types.ts";
 // ChatGPT (2026, free plan too): chatgpt.com/plugins → «Añadir» / "Add" → «Añadir servidor MCP
 // personalizado» / "Add custom MCP server" → form with Icono, Nombre, Descripción, «URL del servidor»
 // and «Autenticación»; the student ticks the trust box and presses «Crear» herself. Older menus:
-// Settings → Connectors → Advanced → Developer mode → Create. Labels checked live in Spanish and
-// English on 2026-11-25 (fixtures chatgpt.html, chatgpt-es.html); re-check the real site before releases.
+// Settings → Connectors → Advanced → Developer mode → Create. Labels checked live in Spanish on
+// 2026-11-25 and in English on 2026-11-26 (English: «Add» menu → "Add custom MCP server" → Name,
+// "Server URL" (input type=url), native "Authentication" select, submit "Create as a plugin"; fixtures
+// chatgpt.html, chatgpt-es.html); re-check the real site before releases.
 export const chatgpt: AutofillSpec = {
   id: "chatgpt",
   label: "ChatGPT",

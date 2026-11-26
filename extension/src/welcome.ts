@@ -53,7 +53,7 @@ const CARDS: Record<AiId, CardText> = {
     planWarn: true,
     steps: [
       "Pulsa «Conectar automáticamente» (o «Copiar enlace»).",
-      "En gemini.google.com/devmode: «Create new» → pega el enlace en «MCP server URL» (Ctrl+V) → «Next».",
+      "En gemini.google.com/devmode?hl=en: «Create new» → pega el enlace en «MCP server URL» (Ctrl+V) → «Next».",
       "Marca tú el aviso y pulsa «Connect».",
       "Nombre: Uniovi Virtual → «Connect». Al preguntar, responde «Permitir siempre».",
     ],

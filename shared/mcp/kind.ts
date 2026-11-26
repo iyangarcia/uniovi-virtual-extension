@@ -10,13 +10,17 @@ export function extname(path: string): string {
   return dot > 0 ? base.slice(dot) : "";
 }
 
-export type FileKind = "pdf" | "pptx" | "docx" | "text" | "other";
+export type FileKind = "pdf" | "pptx" | "docx" | "xlsx" | "text" | "other";
+
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export function kindOf(f: Pick<StoredFile, "path" | "contentType">): FileKind {
   const ext = extname(f.path).toLowerCase();
   if (ext === ".pdf" || f.contentType.includes("pdf")) return "pdf";
   if (ext === ".pptx") return "pptx";
   if (ext === ".docx") return "docx";
+  // .xlsm is the same package with macros; binary .xls and OpenDocument .ods stay "other".
+  if (ext === ".xlsx" || ext === ".xlsm" || f.contentType === XLSX_MIME) return "xlsx";
   if ([".txt", ".md", ".csv", ".json", ".c", ".java", ".py", ".js", ".ts", ".sql", ".xml", ".html"].includes(ext)) return "text";
   if (f.contentType.startsWith("text/")) return "text";
   return "other";

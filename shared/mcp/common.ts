@@ -1,4 +1,5 @@
 import type { Course, Snapshot } from "../types.ts";
+import { isUpload } from "../types.ts";
 import type { DataStore } from "./store.ts";
 
 // Helpers shared by the MCP tools (server.ts) and the search logic (search.ts).
@@ -28,8 +29,12 @@ export const NO_DATA =
 
 export async function requireSnapshot(store: DataStore): Promise<Snapshot> {
   const s = await store.snapshot();
-  if (!s) throw new UserError(NO_DATA);
-  return s;
+  if (s) return s;
+  // Not synced yet, but the student already added files on «Mis apuntes»: answer from those.
+  if (Object.values(await store.index()).some((f) => isUpload(f.resource))) {
+    return { syncedAt: 0, siteUrl: "", courses: [], resources: [], posts: [], assignments: [], events: [], warnings: [NO_DATA] };
+  }
+  throw new UserError(NO_DATA);
 }
 
 /** Resolves a course filter (id, shortname or part of the name, accent-insensitive). */
@@ -43,4 +48,14 @@ export function matchCourses(s: Snapshot, filter?: string): Course[] {
     throw new UserError(`No course matches "${filter}". Courses: ${s.courses.map((c) => c.fullname).join("; ")}`);
   }
   return hits;
+}
+
+/**
+ * True when a course filter asks for the files the student uploaded («Mis archivos»), not for a
+ * campus course. Whole-filter match only, so a course such as «Minería» never counts.
+ */
+export function isUploadsFilter(filter?: string): boolean {
+  if (!filter) return false;
+  const f = fold(filter.trim()).replace(/\s+/g, " ");
+  return /^(0|mis archivos|mis apuntes subidos|mis subidas|archivos subidos|subidos?( por mi)?|mine|my (files|uploads)|uploads?|uploaded)$/.test(f);
 }

@@ -11,6 +11,11 @@ export function fileLabel(courseShortname: string, section: string, filename: st
   return ["files", labelSegment(courseShortname || "Curso"), labelSegment(section || "General"), labelSegment(filename, 150)].join("/");
 }
 
+/** Display path of a file the student added herself: `files/Mis archivos/<filename>` (no course level). */
+export function uploadLabel(uploadSection: string, filename: string): string {
+  return ["files", labelSegment(uploadSection), labelSegment(filename, 150)].join("/");
+}
+
 /** Prefixes the file name with a short stable hash of the key, to tell apart same-named files. */
 export function withClashTag(path: string, key: string): string {
   let h = 0x811c9dc5; // FNV-1a 32-bit

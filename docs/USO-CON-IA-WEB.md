@@ -175,6 +175,16 @@ Todos los archivos que copió la extensión, ordenados por asignatura y tema, si
 
 ![Buscar dentro de los apuntes](img/mis-apuntes-busqueda.png)
 
+### Añadir tus propios archivos
+
+Tu IA también puede leer archivos que no están en el campus: tus propios apuntes o el calendario oficial de exámenes.
+
+1. Descarga el archivo. Por ejemplo, el calendario de exámenes en Excel: está en la página de tu facultad en uniovi.es.
+2. Abre **Mis apuntes** y pulsa **Añadir archivo** (o arrastra el archivo encima de la página).
+3. Aparece en el grupo **Mis archivos**. Ahora pregúntale a tu IA, por ejemplo: «¿Cuándo es el examen de Derecho Civil I?».
+
+Sirven los mismos tipos que en el campus: PDF, Word, PowerPoint, Excel (.xlsx), texto e imágenes. Un Excel antiguo (.xls) o una hoja .ods hay que guardarlos antes como .xlsx. Los archivos que añades tú tienen un botón **Borrar**; los del campus no, porque vuelven con la siguiente sincronización.
+
 ---
 
 ## 6. El botón de la extensión

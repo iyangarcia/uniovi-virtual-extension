@@ -29,6 +29,13 @@ export interface Resource {
   timemodified?: number;
 }
 
+/**
+ * Files the student added on «Mis apuntes» (not from the campus): key `upload:<uuid>`, courseId 0,
+ * modname "upload", section «Mis archivos», url "". They live only in the store, never in a snapshot.
+ */
+export const UPLOAD_SECTION = "Mis archivos";
+export const isUpload = (r: Pick<Resource, "modname">) => r.modname === "upload";
+
 export interface ForumPost {
   id: number;
   discussionId: number;

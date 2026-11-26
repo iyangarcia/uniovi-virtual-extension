@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Snapshot } from "../types.ts";
+import { isUpload, type Resource, type Snapshot, UPLOAD_SECTION } from "../types.ts";
 import { findDates } from "../dates.ts";
 import { RELAY_URL } from "../relay.ts";
 import { DOWNLOAD_PAGE } from "../release.ts";
-import { fmt, fold, matchCourses, nowUnix, requireSnapshot as loadRequired, UserError, when } from "./common.ts";
+import { fmt, fold, isUploadsFilter, matchCourses, nowUnix, requireSnapshot as loadRequired, UserError, when } from "./common.ts";
 import { textOf } from "./extract.ts";
 import { hitFile, searchAll, searchMaterials } from "./search.ts";
 import type { DataStore, StoredFile } from "./store.ts";
@@ -56,6 +56,10 @@ const shortType = (mime?: string) => (mime ? SHORT_TYPES[mime] ?? mime : undefin
 const ACTIVITY_TYPES: Record<string, string> = { url: "link", page: "page", quiz: "quiz", assign: "assignment", book: "book", lesson: "lesson", coursepage: "course page" };
 const FILE_MODS = new Set(["resource", "folder", "section-file", "activity-file"]);
 const materialType = (modname: string, mime?: string) => (FILE_MODS.has(modname) ? shortType(mime) : ACTIVITY_TYPES[modname] ?? modname);
+/** Files the student added on «Mis apuntes» (index entries only, never in the snapshot). */
+const uploadsOf = (index: Record<string, StoredFile>) => Object.values(index).filter((f) => isUpload(f.resource));
+/** Course label of a resource in tool output: the short name, or «Mis archivos» for an upload. */
+const courseLabel = (s: Snapshot, r?: Resource) => (r && isUpload(r) ? UPLOAD_SECTION : s.courses.find((c) => c.id === r?.courseId)?.shortname);
 
 /** First `max` characters of a message with whitespace runs collapsed, "…" when cut. */
 const excerpt = (s: string, max: number) => {
@@ -115,6 +119,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
           courses: s.courses.length,
           materials: s.resources.length,
           downloadedFiles: Object.keys(index).length,
+          uploads: uploadsOf(index).length || undefined,
           forumPosts: s.posts.length,
           assignments: s.assignments.length,
           calendarEvents: s.events.length,
@@ -129,17 +134,18 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     { title: "List courses", annotations: READ_ONLY, description: "Courses the student is enrolled in, with material/post counts and the student's own groups.", inputSchema: {} },
     wrap(async () => {
       const s = await requireSnapshot();
-      return ok(
-        s.courses.map((c) => ({
-          id: c.id,
-          shortname: c.shortname,
-          name: c.fullname,
-          url: c.url,
-          materials: s.resources.filter((r) => r.courseId === c.id).length,
-          forumPosts: s.posts.filter((p) => p.courseId === c.id).length,
-          myGroups: s.myGroups?.[c.id]?.length ? s.myGroups[c.id] : undefined,
-        })),
-      );
+      const uploads = uploadsOf(await store.index()).length;
+      const courses = s.courses.map((c) => ({
+        id: c.id,
+        shortname: c.shortname,
+        name: c.fullname,
+        url: c.url,
+        materials: s.resources.filter((r) => r.courseId === c.id).length,
+        forumPosts: s.posts.filter((p) => p.courseId === c.id).length,
+        myGroups: s.myGroups?.[c.id]?.length ? s.myGroups[c.id] : undefined,
+      }));
+      // Files the student uploaded: not a course, so a count and how to list them.
+      return ok(uploads ? { courses, uploads, uploadsCourse: UPLOAD_SECTION } : courses);
     }),
   );
 
@@ -208,7 +214,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       title: "List course materials",
       annotations: READ_ONLY,
       description:
-        "Files, slides, lecture notes, links, pages, quizzes, assignments and each course's main page published in courses. Returns each item's `key` (use with read_material) and, if downloaded, its absolute local path.",
+        "Files, slides, lecture notes, links, pages, quizzes, assignments and each course's main page published in courses, plus files the student uploaded (course \"Mis archivos\"). Returns each item's `key` (use with read_material) and, if downloaded, its absolute local path.",
       inputSchema: {
         course: courseArg,
         query: z.string().optional().describe("Filter by words in the material name, filename or section."),
@@ -217,9 +223,23 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     wrap(async ({ course, query }: { course?: string; query?: string }) => {
       const s = await requireSnapshot();
       const index = await store.index();
-      const ids = new Set(matchCourses(s, course).map((c) => c.id));
+      const uploadsOnly = isUploadsFilter(course);
+      const ids = new Set(uploadsOnly ? [] : matchCourses(s, course).map((c) => c.id));
       const q = query ? fold(query) : "";
-      const items = s.resources
+      // The student's own files first: few, and often the very thing asked about (e.g. the exam calendar).
+      const uploads = (!course || uploadsOnly ? uploadsOf(index) : [])
+        .filter((f) => !q || fold(`${f.resource.name} ${f.resource.filename ?? ""} ${f.resource.section}`).includes(q))
+        .sort((a, b) => b.timemodified - a.timemodified)
+        .map((f) => ({
+          key: f.key,
+          course: UPLOAD_SECTION,
+          name: f.resource.name,
+          filename: f.resource.filename,
+          type: "subido por ti",
+          modified: f.timemodified ? when(f.timemodified) : undefined,
+          localPath: pathOf(f),
+        }));
+      const campus = s.resources
         .filter((r) => ids.has(r.courseId))
         .filter((r) => !q || fold(`${r.name} ${r.filename ?? ""} ${r.section}`).includes(q))
         .map((r) => {
@@ -236,6 +256,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
             url: r.url,
           };
         });
+      const items = [...uploads, ...campus];
       if (items.length > MAX_MATERIALS) {
         return ok({ note: `${items.length} matches; showing ${MAX_MATERIALS}. Narrow with course/query.`, items: items.slice(0, MAX_MATERIALS) });
       }
@@ -249,7 +270,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       title: "Read course material",
       annotations: READ_ONLY,
       description:
-        "Extracts the text of a material: a downloaded file (PDF, PPTX, DOCX, plain text) or the full text of a page, link, quiz, assignment or course page. Pages/slides are marked with '--- page N ---'. Long documents are paginated by characters: pass the returned nextOffset to continue.",
+        "Extracts the text of a material: a downloaded or uploaded file (PDF, PPTX, DOCX, XLSX, plain text) or the full text of a page, link, quiz, assignment or course page. Pages/slides/sheets are marked with '--- page N ---' / '--- sheet <name> ---'. Long documents are paginated by characters: pass the returned nextOffset to continue.",
       inputSchema: {
         key: z.string().describe("Material key from list_materials."),
         offset: z.number().int().min(0).optional().describe("Character offset to start from (default 0)."),
@@ -267,7 +288,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
       title: "Search inside course materials",
       annotations: READ_ONLY,
       description:
-        "Full-text search inside downloaded PDFs, slides and documents. Returns matching snippets with the page/slide they are on. First search over many files can take a while (text is cached afterwards).",
+        "Full-text search inside downloaded PDFs, slides, documents and spreadsheets, including files the student uploaded. Returns matching snippets with the page/slide they are on. First search over many files can take a while (text is cached afterwards).",
       inputSchema: {
         query: z.string().min(2).describe("Words to search for (all must appear on the same line or nearby)."),
         course: courseArg,
@@ -470,7 +491,8 @@ async function materialText(
   }
   const slice = text.slice(offset, offset + maxChars);
   const next = offset + slice.length < text.length ? offset + slice.length : undefined;
-  const where = localPath === undefined ? `url: ${f.resource.url}` : `localPath: ${localPath}`;
+  const where =
+    localPath !== undefined ? `localPath: ${localPath}` : isUpload(f.resource) ? `${UPLOAD_SECTION}: uploaded by the student` : `url: ${f.resource.url}`;
   // The trailer is what the AI reads last: without it, a cut-off page looks like the whole document.
   const more = next !== undefined ? `\n\n[${text.length - next} more chars: call read_material with offset ${next} to continue.]` : "";
   return `# ${f.resource.name} — ${f.resource.filename}\n${where}\nchars ${offset}-${offset + slice.length} of ${text.length}${next !== undefined ? ` (nextOffset: ${next})` : ""}\n\n${slice}${more}`;
@@ -502,10 +524,11 @@ export async function fetchById(store: DataStore, s: Snapshot, id: string) {
     return { id, title: post.subject, text: threadText(s, post.id), url: post.url, metadata: { course: s.courses.find((c) => c.id === post.courseId)?.shortname, forum: post.forumName } };
   }
   if (kind === "material") {
-    const r = s.resources.find((x) => x.key === ref);
+    // Uploads live in the store index only, never in the snapshot.
+    const r = s.resources.find((x) => x.key === ref) ?? (await store.index())[ref]?.resource;
     const body = await materialText(store, ref, 0, FETCH_CHARS, () => undefined);
     const text = typeof body === "string" ? body : JSON.stringify(body);
-    return { id, title: r?.name ?? ref, text, url: r?.url ?? "", metadata: { course: s.courses.find((c) => c.id === r?.courseId)?.shortname, section: r?.section, note: `Use read_material (key ${JSON.stringify(ref)}) with nextOffset for the rest of long files.` } };
+    return { id, title: r?.name ?? ref, text, url: r?.url ?? "", metadata: { course: courseLabel(s, r), section: r?.section, note: `Use read_material (key ${JSON.stringify(ref)}) with nextOffset for the rest of long files.` } };
   }
   throw new UserError(`Unknown id "${id}". Use ids returned by search.`);
 }
@@ -547,12 +570,13 @@ Be economical: every tool result counts against the student's AI limits. Use the
 - Summaries, notes, flashcards or quizzes on a topic: snippets are not enough. Find the file (list_materials with the topic as query, or search_materials), then read_material it whole, following nextOffset.
 - "What do I have this week?": get_deadlines (daysAhead 7) for assignments and calendar events, plus get_exam_dates (includeDeadlines true) for dates announced in the forums. Add search_forums (sinceDays 7) only if the student asks for news.
 - Exams: get_exam_dates for the course; for format or topics, search_forums (query "examen") and get_forum_post only on the relevant post.
-- search/fetch (materials and forum posts together) are for clients that need them; fetch returns long text, so prefer search_materials and read_material.
+- search/fetch (materials and posts together) are for clients that need them; fetch returns long text, so prefer search_materials and read_material.
 - Grades: get_grades (gradedOnly true), with the evaluation rules from the course page. Teachers and the student's groups: get_teachers.
 - Syllabus, evaluation rules: the course's "course page" material (list_materials query "Página de la asignatura").
+- Files the student uploaded (not from the campus): course "Mis archivos", type "subido por ti"; the official exam calendar may be there.
 - If results look empty or stale, call sync_status; data is as fresh as the student's last sync.
 
-Rules: read-only. Work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide N) using the "--- page N ---" / "--- slide N ---" markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;
+Rules: read-only. Work only from the student's real material and announcements; never invent exam dates, rooms, content or rules. Cite material as (file name, page/slide/sheet) using the "--- page N ---" (slide, sheet) markers. Forum-detected dates are heuristic: quote the snippet and link. Reply in the student's language (usually Spanish).`;
 
 // ---------------------------------------------------------------- study prompts
 // Ready-made workflows, shown by Claude Code / Claude Desktop as slash commands, so the

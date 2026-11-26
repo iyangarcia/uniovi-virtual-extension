@@ -1,8 +1,10 @@
 // "Mis apuntes": the student's synced course files, read straight from the extension's IndexedDB.
 // Courses → sections → files, filter, sort, search inside the text, open in a new tab or window.
+// «Añadir archivo» (button or drag and drop) stores the student's own files under «Mis archivos»
+// (key `upload:<uuid>`, never in the snapshot); only those have «Borrar».
 // Campus strings are untrusted: everything is built with createElement + textContent.
 import { searchCachedMaterials, type MaterialHit } from "../../shared/mcp/scan.ts";
-import type { Snapshot } from "../../shared/types.ts";
+import { type Resource, type Snapshot, UPLOAD_SECTION } from "../../shared/types.ts";
 import {
   blobMime,
   buildEntries,
@@ -27,7 +29,9 @@ import {
   SORT_MODES,
   type SortMode,
   typeLabel,
+  uploadRefusal,
 } from "./files/model.ts";
+import { getSettings, send } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
 
 const CAMPUS_URL = "https://www.campusvirtual.uniovi.es/";
@@ -42,6 +46,10 @@ const sortSelect = $<HTMLSelectElement>("sort");
 const results = $("results");
 const noMatch = $("noMatch");
 const list = $("list");
+const addBtn = $<HTMLButtonElement>("addFile");
+const fileInput = $<HTMLInputElement>("fileInput");
+const uploadNotes = $<HTMLUListElement>("uploadNotes");
+const dropHint = $("dropHint");
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: { className?: string; text?: string } = {}, ...children: (Node | null)[]): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -113,7 +121,8 @@ async function viewer(key: string, page?: number): Promise<void> {
   const f = (await idbStore.index())[key];
   const url = f ? await blobUrl({ key, filename: f.resource.filename ?? f.path, contentType: f.contentType }) : null;
   if (!f || !url) {
-    const box = el("main", {}, el("div", { className: "card empty" }, el("p", { text: "Este archivo ya no está guardado. Entra en el Campus Virtual para que se vuelva a descargar." })));
+    const gone = key.startsWith("upload:") ? "Este archivo ya no está guardado: lo borraste de Mis apuntes." : "Este archivo ya no está guardado. Entra en el Campus Virtual para que se vuelva a descargar.";
+    const box = el("main", {}, el("div", { className: "card empty" }, el("p", { text: gone })));
     const back = el("a", { className: "btn primary", text: "Ir a Mis apuntes" });
     back.href = chrome.runtime.getURL("files.html");
     box.firstElementChild!.append(back);
@@ -145,7 +154,48 @@ function actionsFor(e: FileEntry, hit?: MaterialHit): HTMLElement {
   } else {
     box.append(button("Descargar", "btn small", () => void downloadEntry(e), "Chrome no puede mostrar este tipo de archivo: se guarda en tu carpeta de descargas"));
   }
+  // Only her own files: a campus file would come back with the next sync.
+  if (e.upload) box.append(deleteButton(e));
   return box;
+}
+
+/** «Borrar», then «¿Seguro?» for a few seconds: the second click deletes. */
+function deleteButton(e: FileEntry): HTMLButtonElement {
+  let armed: ReturnType<typeof setTimeout> | undefined;
+  const b = button(
+    "Borrar",
+    "btn small danger",
+    () => {
+      if (!armed) {
+        b.textContent = "¿Seguro?";
+        b.classList.add("armed");
+        armed = setTimeout(() => {
+          armed = undefined;
+          b.textContent = "Borrar";
+          b.classList.remove("armed");
+        }, 4000);
+        return;
+      }
+      clearTimeout(armed);
+      b.disabled = true;
+      void deleteUpload(e);
+    },
+    "Borrar este archivo de Mis apuntes",
+  );
+  b.dataset.action = "delete";
+  return b;
+}
+
+async function deleteUpload(e: FileEntry): Promise<void> {
+  uploadNotes.replaceChildren();
+  try {
+    await send({ type: "delete-upload", key: e.key });
+    note(`${e.title} borrado`, "ok");
+  } catch (err) {
+    console.error("[uniovi] delete", err);
+    note(`${e.title}: no se pudo borrar. Inténtalo de nuevo.`, "error");
+  }
+  await load();
 }
 
 function primaryAction(e: FileEntry): (() => void) | null {
@@ -164,7 +214,7 @@ function fileRow(e: FileEntry, showSection: boolean): HTMLLIElement {
   const title = act ? button(e.title, "title", act) : el("span", { className: "title", text: e.title });
   const meta: string[] = [];
   if (e.filename && e.filename !== e.title) meta.push(e.filename);
-  if (showSection) meta.push(e.section);
+  if (showSection && !e.upload) meta.push(e.section);
   if (e.date) meta.push(formatDate(e.date));
   const size = formatSize(e.size);
   if (size) meta.push(size);
@@ -207,7 +257,7 @@ function renderList(): void {
 function renderEmpty(): void {
   toolbar.hidden = true;
   const box = el("div", { className: "card empty" });
-  box.append(el("p", { text: "Todavía no hay apuntes. Entra en el Campus Virtual y espera a que termine la sincronización." }));
+  box.append(el("p", { text: "Todavía no hay apuntes. Entra en el Campus Virtual y espera a que termine la sincronización. También puedes añadir tus propios archivos con «Añadir archivo»." }));
   box.append(button("Abrir el Campus Virtual", "btn primary", () => void chrome.tabs.create({ url: safeCampusUrl(snapshot?.siteUrl) ?? CAMPUS_URL })));
   list.replaceChildren(box);
 }
@@ -217,6 +267,99 @@ async function renderSummary(): Promise<void> {
   const parts = [`${files} ${files === 1 ? "archivo guardado" : "archivos guardados"}`, `${formatSize(bytes) || "0 B"} ocupados`];
   if (snapshot?.syncedAt) parts.push(`última sincronización: ${formatDate(snapshot.syncedAt)}`);
   summary.textContent = parts.join(" · ");
+}
+
+// ------------------------------------------------------------------ «Añadir archivo»
+
+/** One line per file under the toolbar: «Tema 1.pdf añadido» or why it was refused. */
+function note(text: string, kind: "ok" | "error"): void {
+  uploadNotes.append(el("li", { className: kind, text }));
+  uploadNotes.hidden = false;
+}
+
+function base64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+let adding = Promise.resolve();
+
+/** Same rules as campus files (readable types, «Tamaño máximo»); one at a time, then the list reloads. */
+function addFiles(files: File[]): void {
+  if (!files.length) return;
+  adding = adding.then(async () => {
+    uploadNotes.replaceChildren();
+    const { maxFileMB } = await getSettings();
+    // A file with the name of one she already added replaces it (a newer exam calendar...).
+    const mine = new Map(entries.filter((e) => e.upload && e.filename).map((e) => [e.filename!, e.key]));
+    for (const f of files) {
+      const refusal = uploadRefusal(f, maxFileMB);
+      if (refusal) {
+        note(`${f.name}: ${refusal}`, "error");
+        continue;
+      }
+      try {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const known = mine.get(f.name);
+        const key = known ?? `upload:${crypto.randomUUID()}`;
+        const resource: Resource = {
+          key,
+          cmid: 0,
+          courseId: 0,
+          section: UPLOAD_SECTION,
+          name: f.name,
+          modname: "upload",
+          url: "",
+          filename: f.name,
+          ...(f.type ? { mimetype: f.type } : {}),
+          filesize: f.size,
+          timemodified: Math.floor(Date.now() / 1000),
+        };
+        await send({ type: "upload-file", resource, filename: f.name, contentType: f.type || "application/octet-stream", base64: base64(bytes) });
+        mine.set(f.name, key);
+        note(`${f.name} ${known ? "actualizado" : "añadido"}`, "ok");
+      } catch (err) {
+        console.error("[uniovi] upload", err);
+        note(`${f.name}: no se pudo añadir. Inténtalo de nuevo.`, "error");
+      }
+    }
+    await load();
+  });
+}
+
+function initUploads(): void {
+  addBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    addFiles([...(fileInput.files ?? [])]);
+    fileInput.value = ""; // the same file can be chosen again
+  });
+  // Drag and drop anywhere on the page. Without preventDefault, Chrome would open the file instead.
+  const hasFiles = (ev: DragEvent) => !!ev.dataTransfer?.types.includes("Files");
+  let depth = 0;
+  addEventListener("dragenter", (ev) => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    depth++;
+    dropHint.hidden = false;
+  });
+  addEventListener("dragover", (ev) => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+  });
+  addEventListener("dragleave", (ev) => {
+    if (!hasFiles(ev)) return;
+    depth = Math.max(0, depth - 1);
+    if (!depth) dropHint.hidden = true;
+  });
+  addEventListener("drop", (ev) => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    depth = 0;
+    dropHint.hidden = true;
+    addFiles([...(ev.dataTransfer?.files ?? [])]);
+  });
 }
 
 // ------------------------------------------------------------------ search inside the text
@@ -312,6 +455,7 @@ async function main(): Promise<void> {
   addEventListener("pagehide", markVisited);
 
   if (deepLink.q) filterInput.value = deepLink.q;
+  initUploads();
   await load();
   if (deepLink.course && entries.some((e) => e.courseId === deepLink.course)) {
     for (const e of entries) if (e.courseId !== deepLink.course) collapsed.add(e.courseId);

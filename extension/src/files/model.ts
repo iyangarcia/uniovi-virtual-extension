@@ -2,7 +2,7 @@
 // sort and filter them, how each type is labelled and opened. No browser APIs; server/test imports it.
 import { fold, TZ } from "../../../shared/mcp/common.ts";
 import type { StoredFile } from "../../../shared/mcp/store.ts";
-import type { Course, Resource, Snapshot } from "../../../shared/types.ts";
+import { type Course, isUpload, type Resource, type Snapshot, UPLOAD_SECTION } from "../../../shared/types.ts";
 import { fileExt, isCampusFile, isReadableFile } from "../readable.ts";
 
 export { fold };
@@ -90,6 +90,8 @@ export interface FileEntry {
   url: string;
   /** Position in the snapshot (campus order); large for files the snapshot no longer lists. */
   order: number;
+  /** A file the student added herself («Añadir archivo»): no course, can be deleted. */
+  upload?: boolean;
 }
 
 export function displayTitle(r: Pick<Resource, "modname" | "name" | "filename">): string {
@@ -123,6 +125,7 @@ export function buildEntries(snapshot: Snapshot | null, index: Record<string, St
       contentType: f.contentType,
       url: r.url,
       order: order.get(f.key) ?? base + extra++,
+      ...(isUpload(r) ? { upload: true } : {}),
     });
   }
   for (const r of snapshot?.resources ?? []) {
@@ -145,6 +148,21 @@ export function buildEntries(snapshot: Snapshot | null, index: Record<string, St
     });
   }
   return out.sort((a, b) => a.order - b.order);
+}
+
+// ------------------------------------------------------------------ «Añadir archivo»
+
+/**
+ * Why a file the student wants to add is refused (the same rules as campus files: readable types,
+ * the `maxFileMB` setting), or null when it can be stored. Spanish, shown after the file name.
+ */
+export function uploadRefusal(f: { name: string; size: number; type?: string }, maxFileMB: number): string | null {
+  // The old binary Excel format and OpenDocument sheets have no text the AI can read; .xlsx does.
+  if (["xls", "ods"].includes(fileExt(f.name))) return "guárdalo como .xlsx y vuelve a subirlo";
+  if (isReadableFile({ filename: f.name, mimetype: f.type || undefined }) !== true) return "este tipo de archivo no se puede leer";
+  if (f.size > maxFileMB * 1024 * 1024) return `demasiado grande (máx. ${maxFileMB} MB)`;
+  if (f.size === 0) return "está vacío";
+  return null;
 }
 
 // ------------------------------------------------------------------ filter, sort, group
@@ -192,21 +210,27 @@ export interface CourseGroup {
   count: number;
 }
 
+/** Group id of «Mis archivos» (uploads have courseId 0; no campus course has that id). */
+export const UPLOAD_GROUP_ID = 0;
+
 /**
- * Courses in snapshot order (unknown ones last, by id). With mode "course" each course is split
- * into its sections in campus order; with "name"/"date" each course is one flat list in that order.
+ * «Mis archivos» first (the student's own files, one flat list), then courses in snapshot order
+ * (unknown ones last, by id). With mode "course" each course is split into its sections in campus order; with "name"/"date" each course is one flat list in that order.
  */
 export function groupEntries(entries: FileEntry[], courses: Course[], mode: SortMode): CourseGroup[] {
   const sorted = sortEntries(entries, mode);
   const byCourse = new Map<number, FileEntry[]>();
+  // The student's own files: one group of their own, first, no sections (they belong to no course).
+  const uploads = sorted.filter((e) => e.upload);
+  const groups: CourseGroup[] = uploads.length ? [{ id: UPLOAD_GROUP_ID, name: UPLOAD_SECTION, sections: [{ name: "", files: uploads }], count: uploads.length }] : [];
   for (const e of sorted) {
+    if (e.upload) continue;
     const list = byCourse.get(e.courseId) ?? [];
     list.push(e);
     byCourse.set(e.courseId, list);
   }
   const known = courses.filter((c) => byCourse.has(c.id));
   const unknown = [...byCourse.keys()].filter((id) => !courses.some((c) => c.id === id)).sort((a, b) => a - b);
-  const groups: CourseGroup[] = [];
   for (const c of [...known, ...unknown.map((id) => ({ id, fullname: `Asignatura ${id}`, shortname: undefined }))]) {
     const files = byCourse.get(c.id)!;
     let sections: SectionGroup[];
@@ -225,8 +249,9 @@ export function groupEntries(entries: FileEntry[], courses: Course[], mode: Sort
 // ------------------------------------------------------------------ "Nuevo", dates, sizes
 
 /** Stored after her previous visit. No previous visit (first time on the page): nothing is "new". */
-export function isNew(e: Pick<FileEntry, "stored" | "storedAt">, lastVisit: number | undefined): boolean {
-  return !!(e.stored && lastVisit && e.storedAt && e.storedAt > lastVisit);
+export function isNew(e: Pick<FileEntry, "stored" | "storedAt" | "upload">, lastVisit: number | undefined): boolean {
+  // Her own files are not news to her.
+  return !!(e.stored && !e.upload && lastVisit && e.storedAt && e.storedAt > lastVisit);
 }
 
 export const LAST_VISIT_KEY = "filesLastVisit";
@@ -256,8 +281,10 @@ export function formatSize(bytes: number | undefined): string {
 // ------------------------------------------------------------------ search hits, deep links
 
 /** "página 2" / "diapositiva 3" for a search hit; "" when the hit has no page marker. */
-export function locationLabel(h: { locationKind?: "page" | "slide"; locationNumber?: number }): string {
-  if (!h.locationNumber) return "";
+export function locationLabel(h: { location?: string; locationKind?: "page" | "slide"; locationNumber?: number }): string {
+  // Spreadsheets: `location` is "sheet <name>" (no page number).
+  const sheet = /^sheet (.+)$/.exec(h.location ?? "")?.[1];
+  if (!h.locationNumber) return sheet ? `hoja ${sheet}` : "";
   return `${h.locationKind === "slide" ? "diapositiva" : "página"} ${h.locationNumber}`;
 }
 
@@ -271,7 +298,7 @@ export const pageUrl = (blobUrl: string, page?: number) => (page ? `${blobUrl}#p
 
 /** Search snippets come from text with "--- page N ---" markers: drop them for display. */
 export function cleanSnippet(s: string): string {
-  return s.replace(/-{3} (?:page|slide) \d+ -{3}/g, " ").replace(/\s+/g, " ").trim();
+  return s.replace(/-{3} (?:page|slide) \d+ -{3}/g, " ").replace(/-{3} sheet .+? -{3}/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /**

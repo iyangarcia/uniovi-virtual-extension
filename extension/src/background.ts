@@ -1,7 +1,7 @@
 import { isImportant, seenAll } from "../../shared/digest.ts";
 import { isWarming, warmTextCache } from "../../shared/mcp/extract.ts";
 import { LATEST_RELEASE_API } from "../../shared/release.ts";
-import type { Resource, Snapshot } from "../../shared/types.ts";
+import { isUpload, type Resource, type Snapshot, UPLOAD_SECTION } from "../../shared/types.ts";
 import { initAgent, startAgent } from "./agent/index.ts";
 import { type BridgeDeps, DEV_BRIDGE_KEY, devBridgeOn, sendToBridge } from "./bridge.ts";
 import type { KnownFile } from "./download.ts";
@@ -141,8 +141,11 @@ chrome.notifications.onClicked.addListener(async (id) => {
 
 /** Stores one downloaded file in IndexedDB, then, if the developer switched it on, copies it to the dev bridge. */
 async function ingestFile(resource: Resource, filename: string, contentType: string, bytes: Uint8Array) {
-  const snapshot = (await idbStore.snapshot()) ?? ((await chrome.storage.local.get("snapshot")).snapshot as Snapshot | undefined);
-  const course = snapshot?.courses.find((c) => c.id === resource.courseId)?.shortname ?? String(resource.courseId);
+  let course = UPLOAD_SECTION; // the student's own files ("Mis apuntes" → «Añadir archivo») belong to no course
+  if (!isUpload(resource)) {
+    const snapshot = (await idbStore.snapshot()) ?? ((await chrome.storage.local.get("snapshot")).snapshot as Snapshot | undefined);
+    course = snapshot?.courses.find((c) => c.id === resource.courseId)?.shortname ?? String(resource.courseId);
+  }
   await idbStore.putFile({ ...resource, filename }, course, contentType, bytes);
   scheduleWarm();
   // Developers with `npm run serve` running also get the file on disk. Never required.
@@ -192,6 +195,9 @@ async function triggerSync(tabId?: number): Promise<void> {
   await setState({ running: true, text: "Empezando…", error: false });
 }
 
+/** Sent by one of the extension's own pages (not a content script in a campus tab). */
+const fromExtensionPage = (sender: chrome.runtime.MessageSender) => sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL(""));
+
 async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
     case "snapshot-collected":
@@ -199,6 +205,11 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       return null;
 
     case "upload-file":
+      // The student's own files come only from the extension's pages ("Mis apuntes"), never from a campus tab.
+      {
+        const upload = isUpload(msg.resource);
+        if (upload !== msg.resource.key.startsWith("upload:") || (upload && !fromExtensionPage(sender))) throw new Error("No permitido");
+      }
       await ingestFile(msg.resource, msg.filename, msg.contentType, Uint8Array.from(atob(msg.base64), (c) => c.charCodeAt(0)));
       return null;
 
@@ -209,6 +220,12 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       await ingestFile(msg.resource, msg.resource.filename, "text/plain", bytes);
       return true;
     }
+
+    case "delete-upload":
+      // Only the student's own files: a campus file would just come back with the next sync.
+      if (!msg.key.startsWith("upload:") || !fromExtensionPage(sender)) throw new Error("Solo se pueden borrar los archivos que añadiste tú");
+      await idbStore.deleteFile(msg.key);
+      return null;
 
     case "known-files": {
       // Skipped files (unreadable, too large) count as known, so the content script doesn't fetch them again.

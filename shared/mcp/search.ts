@@ -43,10 +43,12 @@ export async function searchAll(store: DataStore, s: Snapshot, query: string, li
   const out: SearchResult[] = [];
   const { results } = await searchMaterials(store, { snapshot: s, query, limit: limit * 3 });
   const seen = new Set<string>();
+  // The student's uploads are in the store only, never in the snapshot.
+  const index = results.length ? await store.index() : {};
   for (const h of results) {
     if (seen.has(h.key)) continue;
     seen.add(h.key);
-    const r = s.resources.find((x) => x.key === h.key);
+    const r = s.resources.find((x) => x.key === h.key) ?? index[h.key]?.resource;
     out.push({ id: `material:${h.key}`, title: `${hitFile(h)}${h.location ? `, ${h.location}` : ""}`, url: r?.url ?? "", text: h.snippet });
   }
   const terms = fold(query).split(/\s+/).filter(Boolean);

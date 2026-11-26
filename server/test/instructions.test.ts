@@ -34,7 +34,7 @@ test("instructions: economical, citation rule, nextOffset, only real tool names"
   await client.connect(b);
   try {
     const text = client.getInstructions() ?? "";
-    assert.match(text, /\(file name, page\/slide N\)/);
+    assert.match(text, /\(file name, page\/slide\/sheet\)/);
     assert.match(text, /--- page N ---/);
     assert.match(text, /nextOffset/);
     assert.match(text, /15,000 characters/);

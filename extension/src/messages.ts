@@ -11,7 +11,8 @@ import type { Resource, Snapshot } from "../../shared/types.ts";
 
 export type Message =
   | { type: "snapshot-collected"; snapshot: Snapshot } // content -> background: store, notify, deliver
-  | { type: "upload-file"; resource: Resource; filename: string; contentType: string; base64: string } // content -> background: store in IndexedDB (+ dev bridge if on)
+  | { type: "upload-file"; resource: Resource; filename: string; contentType: string; base64: string } // content -> background: store in IndexedDB (+ dev bridge if on); also "Mis apuntes" -> background for the student's own files (isUpload)
+  | { type: "delete-upload"; key: string } // "Mis apuntes" -> background: delete one of the student's own files (key `upload:…` only)
   | { type: "upload-text"; resource: Resource & { filename: string }; text: string } // content -> background: an activity's or course page's text as a .txt file; replies true if it changed
   | { type: "known-files" } // content -> background: Record<key, KnownFile> (download.ts) of stored + deliberately skipped files
   | { type: "skip-file"; resource: Resource } // content -> background: not a readable type or too large, don't fetch again

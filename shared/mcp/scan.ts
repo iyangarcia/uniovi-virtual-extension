@@ -1,5 +1,5 @@
-import type { Snapshot } from "../types.ts";
-import { fold, matchCourses, UserError, NO_DATA } from "./common.ts";
+import { isUpload, type Snapshot, UPLOAD_SECTION } from "../types.ts";
+import { fold, isUploadsFilter, matchCourses, UserError, NO_DATA } from "./common.ts";
 import { kindOf } from "./kind.ts";
 import type { DataStore, StoredFile } from "./store.ts";
 
@@ -12,13 +12,13 @@ export interface MaterialHit {
   /** Resource key of the file (StoredFile.key). */
   key: string;
   courseId: number;
-  /** Course short name, when the snapshot knows the course. */
+  /** Course short name, when the snapshot knows the course; «Mis archivos» for the student's uploads. */
   course?: string;
   section: string;
   /** Activity name (Resource.name). */
   name: string;
   filename?: string;
-  /** "page 3" / "slide 2" from the extraction markers, or "" before the first marker. */
+  /** "page 3" / "slide 2" / "sheet Notas" from the extraction markers, or "" before the first marker. */
   location: string;
   locationKind?: "page" | "slide";
   locationNumber?: number;
@@ -27,7 +27,7 @@ export interface MaterialHit {
 
 export interface SearchMaterialsOptions {
   query: string;
-  /** Course filter as the tools take it: id, short name or part of the name (accent-insensitive). */
+  /** Course filter as the tools take it: id, short name or part of the name (accent-insensitive), or «Mis archivos» for uploads only. */
   course?: string;
   /** Exact course id filter (combined with `course` if both are given). */
   courseId?: number;
@@ -55,13 +55,16 @@ export async function scanMaterials(
 ): Promise<SearchMaterialsResult & { files: StoredFile[] }> {
   const { query, course, courseId, limit = 30 } = opts;
   const s = opts.snapshot !== undefined ? opts.snapshot : await store.snapshot();
-  if (!s && course) throw new UserError(NO_DATA);
-  const ids = s ? new Set(matchCourses(s, course).map((c) => c.id)) : null;
-  const files = Object.values(await store.index()).filter(
-    (f: StoredFile) =>
-      (!ids || ids.has(f.resource.courseId)) && (courseId === undefined || f.resource.courseId === courseId) && kindOf(f) !== "other",
-  );
-  const courseName = (id: number) => s?.courses.find((c) => c.id === id)?.shortname;
+  // The student's own uploads (courseId 0) belong to no course: in with no course filter or with «Mis archivos».
+  const uploadsOnly = isUploadsFilter(course);
+  if (!s && course && !uploadsOnly) throw new UserError(NO_DATA);
+  const ids = s && !uploadsOnly ? new Set(matchCourses(s, course).map((c) => c.id)) : null;
+  const wanted = (f: StoredFile) =>
+    isUpload(f.resource)
+      ? (!course || uploadsOnly) && (courseId === undefined || courseId === f.resource.courseId)
+      : !uploadsOnly && (!ids || ids.has(f.resource.courseId)) && (courseId === undefined || f.resource.courseId === courseId);
+  const files = Object.values(await store.index()).filter((f: StoredFile) => wanted(f) && kindOf(f) !== "other");
+  const courseName = (f: StoredFile) => (isUpload(f.resource) ? UPLOAD_SECTION : s?.courses.find((c) => c.id === f.resource.courseId)?.shortname);
   const terms = fold(query).split(/\s+/).filter(Boolean);
   const results: MaterialHit[] = [];
   let pending = 0;
@@ -77,6 +80,13 @@ export async function scanMaterials(
     const folded = fold(text).split("\n");
     const same = folded.length === lines.length;
     for (let i = 0; i < lines.length && results.length < limit; i++) {
+      const sheet = lines[i]!.startsWith("--- sheet ") ? /^--- sheet (.+) ---$/.exec(lines[i]!) : null;
+      if (sheet) {
+        location = `sheet ${sheet[1]}`;
+        locationKind = undefined;
+        locationNumber = undefined;
+        continue;
+      }
       const marker = /^--- (page|slide) (\d+) ---$/.exec(lines[i]!);
       if (marker) {
         location = `${marker[1]} ${marker[2]}`;
@@ -91,7 +101,7 @@ export async function scanMaterials(
         results.push({
           key: f.key,
           courseId: f.resource.courseId,
-          course: courseName(f.resource.courseId),
+          course: courseName(f),
           section: f.resource.section,
           name: f.resource.name,
           filename: f.resource.filename,

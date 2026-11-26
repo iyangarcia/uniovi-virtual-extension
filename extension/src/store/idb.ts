@@ -1,7 +1,7 @@
 import type { DataStore, StoredFile } from "../../../shared/mcp/store.ts";
-import type { Resource, Snapshot } from "../../../shared/types.ts";
+import { isUpload, type Resource, type Snapshot, UPLOAD_SECTION } from "../../../shared/types.ts";
 import type { KnownFile } from "../download.ts";
-import { fileLabel, textKey, withClashTag } from "./paths.ts";
+import { fileLabel, textKey, uploadLabel, withClashTag } from "./paths.ts";
 
 // The student's data, kept by the extension itself in IndexedDB (database "uniovi"). Works from the
 // service worker and from extension pages (same origin, same database). Object stores:
@@ -119,7 +119,8 @@ export class IdbStore implements DataStore {
     const tx = db.transaction(["files", "blobs", "texts", "meta"], "readwrite");
     const files = tx.objectStore("files");
     const existing = (await done(files.get(resource.key))) as StoredFile | undefined;
-    let path = existing?.path ?? fileLabel(courseShortname, resource.section, resource.filename);
+    // The student's own files (isUpload) have no course: `files/Mis archivos/<name>`.
+    let path = existing?.path ?? (isUpload(resource) ? uploadLabel(UPLOAD_SECTION, resource.filename) : fileLabel(courseShortname, resource.section, resource.filename));
     if (!existing) {
       // Another resource with the same label (two "Tema1.pdf" in one section): tag the new one.
       const clash = (await done(files.getAll())) as StoredFile[];
@@ -141,6 +142,16 @@ export class IdbStore implements DataStore {
     tx.objectStore("texts").delete(IDBKeyRange.bound(`${resource.key}|`, `${resource.key}|￿`));
     await finished(tx);
     return stored;
+  }
+
+  /** Removes a stored file: its record, its bytes and every cached text of it, in one transaction. */
+  async deleteFile(key: string): Promise<void> {
+    const db = await openDb();
+    const tx = db.transaction(["files", "blobs", "texts"], "readwrite");
+    tx.objectStore("files").delete(key);
+    tx.objectStore("blobs").delete(key);
+    tx.objectStore("texts").delete(IDBKeyRange.bound(`${key}|`, `${key}|￿`));
+    await finished(tx);
   }
 
   /** Is this exactly what is already stored under `key`? */

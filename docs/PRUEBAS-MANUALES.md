@@ -102,6 +102,7 @@ With a real install that has synced and has a connected AI:
 - [ ] "Nuevo" marks appear for files since the last visit and clear after it.
 - [ ] Open two PDFs (e.g. exercises and solutions) with **Ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
 - [ ] A .docx / .pptx offers **Descargar** and saves one copy. A zip shows as a campus link.
+- [ ] **Añadir archivo**: download the exam-calendar .xlsx from uniovi.es and add it (button and drag and drop): it shows under «Mis archivos»; a .zip, a .xls and a .ods are refused with a message; the AI answers «¿cuándo es el examen de…?» from it; **Borrar** (click twice) removes it, and a sync doesn't bring it back. (Automated: `cd scripts/shots && node verify-uploads.mjs`.)
 
 ## 7. Sync on the real campus
 

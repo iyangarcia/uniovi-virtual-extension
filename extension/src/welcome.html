@@ -59,6 +59,9 @@
       .update p { margin: 0; color: var(--muted); font-size: 15px; }
       .update a { color: var(--accent); font-weight: 700; }
       .maint { font-size: 13px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 10px; margin: 0 0 14px; }
+      .next { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+      .next[hidden] { display: none; }
+      .next .plain { margin-left: 8px; }
       footer { margin-top: 24px; font-size: 15px; color: var(--muted); }
       footer a { color: var(--accent); }
       @media (max-width: 560px) { h1 { font-size: 24px; } .step { padding: 16px; gap: 12px; } .mark { width: 32px; height: 32px; font-size: 16px; } }
@@ -78,7 +81,7 @@
 
       <section class="step done" id="step1">
         <div class="mark">✓</div>
-        <div class="body"><h2>Extensión instalada ✓</h2><p class="muted">Ya está en tu Chrome. Puedes abrirla con el icono de Uniovi Virtual (arriba a la derecha, en la pieza de puzle 🧩).</p></div>
+        <div class="body"><h2>Extensión instalada ✓</h2><p class="muted">Ya está en tu Chrome. El icono de Uniovi Virtual (arriba a la derecha, en la pieza de puzle 🧩; pulsa la chincheta 📌 para tenerlo siempre a la vista) abre su panel a un lado de la pantalla: ahí están tus apuntes y los ajustes.</p></div>
       </section>
 
       <section class="step" id="step2">
@@ -98,12 +101,13 @@
           <div id="aiStatus" class="status busy" role="status" aria-live="polite">Conectando…</div>
           <div id="aiHint" class="muted"></div>
           <div class="cards" id="cards"></div>
+          <p id="fromNow" class="next" hidden>Desde ahora, pulsa el icono de Uniovi Virtual para ver tus apuntes. <button class="plain" id="openPanelNow" type="button">Abrir el panel</button></p>
         </div>
       </section>
 
       <footer>
         Tus archivos se guardan solo en este ordenador. Tu IA solo puede leerlos mientras Chrome esté abierto.
-        Puedes verlos en <a href="#" id="openFiles">Mis apuntes</a>.
+        <a href="#" id="openPanel">Abrir el panel de Uniovi Virtual</a>.
       </footer>
     </main>
     <script type="module" src="welcome.js"></script>

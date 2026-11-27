@@ -1,4 +1,5 @@
-// Welcome page: opened on install and from the popup ("Cómo conectarla"). Three live steps:
+// Welcome (setup) page: opened on install and from the side panel («Conectar mi IA», «Conectar otra
+// IA»). Three live steps:
 // extension installed, campus synced once, AI connected (an AI has made a request). Everything is
 // built with textContent; the page re-renders when one of its chrome.storage keys changes.
 import { AGENT_KEYS, aiConnectionEnabled, type AgentState, type AgentStats } from "./agent/state.ts";
@@ -8,6 +9,7 @@ import type { SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
 import { copyText, flash, h, updateNotice } from "./ui/dom.ts";
 import { currentLink } from "./ui/link.ts";
+import { openSidePanel } from "./ui/sidepanel.ts";
 import { lastSyncLabel, statusSentence } from "./ui/status.ts";
 import { pendingUpdate, UPDATE_KEYS } from "./ui/update.ts";
 
@@ -142,7 +144,9 @@ async function render() {
   }
 
   // Step 3: done once an AI has actually asked for something.
-  setStep($("step3"), (stats?.requests ?? 0) > 0, "3");
+  const connected = (stats?.requests ?? 0) > 0;
+  setStep($("step3"), connected, "3");
+  $("fromNow").hidden = !connected;
   const view = statusSentence({ enabled: aiConnectionEnabled(got[AGENT_KEYS.enabled]), ...(agent ? { agent } : {}), synced });
   const status = $("aiStatus");
   status.className = `status ${view.tone}`;
@@ -157,10 +161,11 @@ async function render() {
 }
 
 $("openCampus").addEventListener("click", () => void chrome.tabs.create({ url: CAMPUS_URL }));
-$("openFiles").addEventListener("click", (e) => {
+$("openPanel").addEventListener("click", (e) => {
   e.preventDefault();
-  void chrome.tabs.create({ url: chrome.runtime.getURL("files.html") });
+  openSidePanel();
 });
+$("openPanelNow").addEventListener("click", openSidePanel);
 $("cards").replaceChildren(...(Object.keys(AI_SPECS) as AiId[]).map(card));
 
 chrome.storage.onChanged.addListener((changes, area) => {

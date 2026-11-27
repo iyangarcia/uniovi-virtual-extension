@@ -1,10 +1,17 @@
-// "Mis apuntes": the student's synced course files, read straight from the extension's IndexedDB.
-// Courses → sections → files, filter, sort, search inside the text, open in a new tab or window.
+// The Uniovi Virtual side panel (the extension icon opens it: manifest `side_panel`), top to bottom:
+// - a «Conecta tu IA» card until an AI has made its first request, then the status line + Copiar enlace;
+// - "Mis apuntes": the student's synced course files, read straight from the extension's IndexedDB.
+//   Courses → sections → files, filter, sort, search inside the text. The title opens the file in the
+//   viewer tab; the rest (Ventana nueva, Descargar, Borrar) is in each row's «⋯» menu;
+// - «Ajustes»: Conectar con mi IA, Sincronizar ahora, sync settings, Tu enlace / Cambiar enlace.
 // «Añadir archivo» (button or drag and drop) stores the student's own files under «Mis archivos»
 // (key `upload:<uuid>`, never in the snapshot); only those have «Borrar».
+// The same page opened as a tab with `?open=<key>` is the viewer (see viewer() below).
 // Campus strings are untrusted: everything is built with createElement + textContent.
 import { searchCachedMaterials, type MaterialHit } from "../../shared/mcp/scan.ts";
 import { type Resource, type Snapshot, UPLOAD_SECTION } from "../../shared/types.ts";
+import { changeLink } from "./agent/identity.ts";
+import { AGENT_KEYS, aiConnectionEnabled, type AgentState, type AgentStats } from "./agent/state.ts";
 import {
   blobMime,
   buildEntries,
@@ -31,11 +38,17 @@ import {
   typeLabel,
   uploadRefusal,
 } from "./files/model.ts";
-import { getSettings, send } from "./messages.ts";
+import { getSettings, send, type Settings, type SyncState } from "./messages.ts";
 import { idbStore } from "./store/idb.ts";
+import { copyText, flash, updateNotice } from "./ui/dom.ts";
+import { currentLink } from "./ui/link.ts";
+import { openSidePanel } from "./ui/sidepanel.ts";
+import { formatBytes, lastSyncLabel, statusSentence } from "./ui/status.ts";
+import { pendingUpdate, UPDATE_KEYS } from "./ui/update.ts";
 
 const CAMPUS_URL = "https://www.campusvirtual.uniovi.es/";
 const SORT_KEY = "filesSort";
+const VERSION = chrome.runtime.getManifest().version;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const summary = $("summary");
@@ -82,9 +95,9 @@ const deepLink = parseDeepLink(location.search);
 // ------------------------------------------------------------------ opening files
 
 // A tab opened straight on a blob: URL works (Chrome shows the PDF), but the URL dies with the page
-// that created it: after closing "Mis apuntes", reloading that tab says "No se ha podido acceder al
-// archivo". So files open in a viewer tab of their own, `files.html?open=<key>`, which makes its own
-// blob URL and shows it full-size in an iframe: it survives this page, reloads fine, and the tab
+// that created it: after closing the panel, reloading that tab says "No se ha podido acceder al
+// archivo". So files open in a viewer tab of their own, `home.html?open=<key>`, which makes its own
+// blob URL and shows it full-size in an iframe: it survives the panel, reloads fine, and the tab
 // title is the file name. See viewer() below.
 
 async function blobUrl(e: Pick<FileEntry, "key" | "filename" | "contentType">): Promise<string | null> {
@@ -115,7 +128,7 @@ async function downloadEntry(e: FileEntry): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Viewer mode (`files.html?open=<key>&page=<n>`): one stored file filling the tab. */
+/** Viewer mode (`home.html?open=<key>&page=<n>`): one stored file filling the tab. */
 async function viewer(key: string, page?: number): Promise<void> {
   document.querySelector("main")?.remove();
   const f = (await idbStore.index())[key];
@@ -123,9 +136,7 @@ async function viewer(key: string, page?: number): Promise<void> {
   if (!f || !url) {
     const gone = key.startsWith("upload:") ? "Este archivo ya no está guardado: lo borraste de Mis apuntes." : "Este archivo ya no está guardado. Entra en el Campus Virtual para que se vuelva a descargar.";
     const box = el("main", {}, el("div", { className: "card empty" }, el("p", { text: gone })));
-    const back = el("a", { className: "btn primary", text: "Ir a Mis apuntes" });
-    back.href = chrome.runtime.getURL("files.html");
-    box.firstElementChild!.append(back);
+    box.firstElementChild!.append(button("Abrir el panel de Uniovi Virtual", "btn primary", openSidePanel));
     document.body.append(box);
     return;
   }
@@ -137,34 +148,85 @@ async function viewer(key: string, page?: number): Promise<void> {
   document.body.append(frame);
 }
 
-function actionsFor(e: FileEntry, hit?: MaterialHit): HTMLElement {
-  const box = el("div", { className: "actions" });
-  if (!e.stored) {
-    const href = safeCampusUrl(e.url);
-    if (href) {
-      const a = el("a", { className: "btn small", text: "Abrir en el campus" });
-      a.href = href;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      box.append(a);
-    }
-  } else if (openMode(e.type) === "open") {
-    box.append(button("Abrir", "btn small", () => void openEntry(e, "tab", hit), "Abrir en una pestaña nueva"));
-    box.append(button("Ventana nueva", "btn small", () => void openEntry(e, "window", hit), "Abrir en ventana nueva, para ponerla al lado de otra"));
-  } else {
-    box.append(button("Descargar", "btn small", () => void downloadEntry(e), "Chrome no puede mostrar este tipo de archivo: se guarda en tu carpeta de descargas"));
+// ------------------------------------------------------------------ per-row «⋯» menu
+
+let openMenu: { box: HTMLElement; more: HTMLButtonElement; items: HTMLElement } | null = null;
+
+function closeMenu(): void {
+  if (!openMenu) return;
+  openMenu.items.hidden = true;
+  openMenu.more.setAttribute("aria-expanded", "false");
+  openMenu = null;
+}
+
+function menuItem(text: string, onClick: () => void, title?: string): HTMLButtonElement {
+  const b = button(
+    text,
+    "",
+    () => {
+      closeMenu();
+      onClick();
+    },
+    title,
+  );
+  b.setAttribute("role", "menuitem");
+  return b;
+}
+
+/** A file's secondary actions (the title already does the main one); null when it has none. */
+function rowMenu(e: FileEntry, hit?: MaterialHit): HTMLElement | null {
+  const items: HTMLElement[] = [];
+  if (e.stored) {
+    if (openMode(e.type) === "open") items.push(menuItem("Ventana nueva", () => void openEntry(e, "window", hit), "Abrir en ventana nueva, para ponerla al lado de otra"));
+    items.push(menuItem("Descargar", () => void downloadEntry(e), "Guardar una copia en tu carpeta de descargas"));
   }
   // Only her own files: a campus file would come back with the next sync.
-  if (e.upload) box.append(deleteButton(e));
+  if (e.upload) items.push(deleteButton(e));
+  if (!items.length) return null;
+  const menu = el("div", { className: "menu-items" }, ...items);
+  menu.setAttribute("role", "menu");
+  menu.hidden = true;
+  const box = el("div", { className: "menu" });
+  const more = button("⋯", "more", () => {
+    const wasOpen = openMenu?.more === more;
+    closeMenu();
+    if (wasOpen) return;
+    menu.hidden = false;
+    more.setAttribute("aria-expanded", "true");
+    openMenu = { box, more, items: menu };
+  });
+  more.setAttribute("aria-haspopup", "menu");
+  more.setAttribute("aria-expanded", "false");
+  more.setAttribute("aria-label", `Más opciones: ${e.title}`);
+  more.title = "Más opciones";
+  box.append(more, menu);
   return box;
 }
 
-/** «Borrar», then «¿Seguro?» for a few seconds: the second click deletes. */
+/** The file name: opens it in the viewer tab, downloads it (types Chrome can't show) or links to the campus. */
+function titleFor(e: FileEntry, hit?: MaterialHit): HTMLElement {
+  if (e.stored) {
+    const open = openMode(e.type) === "open";
+    return open
+      ? button(e.title, "title", () => void openEntry(e, "tab", hit), "Abrir en una pestaña nueva")
+      : button(e.title, "title", () => void downloadEntry(e), "Chrome no puede mostrar este tipo de archivo: se guarda en tu carpeta de descargas");
+  }
+  const href = safeCampusUrl(e.url);
+  if (!href) return el("span", { className: "title", text: e.title });
+  const a = el("a", { className: "title", text: e.title });
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.title = "Abrir en el Campus Virtual";
+  return a;
+}
+
+/** «Borrar», then «¿Seguro?» for a few seconds: the second click deletes. The menu stays open between them. */
 function deleteButton(e: FileEntry): HTMLButtonElement {
   let armed: ReturnType<typeof setTimeout> | undefined;
   const b = button(
     "Borrar",
-    "btn small danger",
+    "danger",
     () => {
       if (!armed) {
         b.textContent = "¿Seguro?";
@@ -178,11 +240,13 @@ function deleteButton(e: FileEntry): HTMLButtonElement {
       }
       clearTimeout(armed);
       b.disabled = true;
+      closeMenu();
       void deleteUpload(e);
     },
     "Borrar este archivo de Mis apuntes",
   );
   b.dataset.action = "delete";
+  b.setAttribute("role", "menuitem");
   return b;
 }
 
@@ -198,11 +262,6 @@ async function deleteUpload(e: FileEntry): Promise<void> {
   await load();
 }
 
-function primaryAction(e: FileEntry): (() => void) | null {
-  if (!e.stored) return null;
-  return openMode(e.type) === "open" ? () => void openEntry(e, "tab") : () => void downloadEntry(e);
-}
-
 // ------------------------------------------------------------------ rendering
 
 function fileRow(e: FileEntry, showSection: boolean): HTMLLIElement {
@@ -210,22 +269,21 @@ function fileRow(e: FileEntry, showSection: boolean): HTMLLIElement {
   li.dataset.key = e.key;
   li.dataset.type = e.type;
   li.append(el("span", { className: `type ${e.type}`, text: typeLabel(e.type) }));
-  const act = primaryAction(e);
-  const title = act ? button(e.title, "title", act) : el("span", { className: "title", text: e.title });
   const meta: string[] = [];
   if (e.filename && e.filename !== e.title) meta.push(e.filename);
   if (showSection && !e.upload) meta.push(e.section);
   if (e.date) meta.push(formatDate(e.date));
   const size = formatSize(e.size);
   if (size) meta.push(size);
-  if (!e.stored) meta.push("no se guarda en el ordenador");
-  li.append(el("div", { className: "info" }, title, el("div", { className: "meta", text: meta.join(" · ") })));
+  if (!e.stored) meta.push("solo en el campus");
+  li.append(el("div", { className: "info" }, titleFor(e), el("div", { className: "meta", text: meta.join(" · ") })));
   if (isNew(e, lastVisit)) li.append(el("span", { className: "badge-new", text: "Nuevo" }));
-  li.append(actionsFor(e));
+  li.append(rowMenu(e) ?? "");
   return li;
 }
 
 function renderList(): void {
+  closeMenu();
   const query = filterInput.value;
   const shown = filterEntries(entries, query);
   const groups = groupEntries(shown, snapshot?.courses ?? [], sortMode);
@@ -257,15 +315,15 @@ function renderList(): void {
 function renderEmpty(): void {
   toolbar.hidden = true;
   const box = el("div", { className: "card empty" });
-  box.append(el("p", { text: "Todavía no hay apuntes. Entra en el Campus Virtual y espera a que termine la sincronización. También puedes añadir tus propios archivos con «Añadir archivo»." }));
+  box.append(el("p", { text: "Todavía no hay apuntes. Entra en el Campus Virtual y espera a que termine la sincronización. También puedes añadir tus propios archivos con «Añadir archivo» o arrastrándolos aquí." }));
   box.append(button("Abrir el Campus Virtual", "btn primary", () => void chrome.tabs.create({ url: safeCampusUrl(snapshot?.siteUrl) ?? CAMPUS_URL })));
   list.replaceChildren(box);
 }
 
 async function renderSummary(): Promise<void> {
   const { files, bytes } = await idbStore.usage();
-  const parts = [`${files} ${files === 1 ? "archivo guardado" : "archivos guardados"}`, `${formatSize(bytes) || "0 B"} ocupados`];
-  if (snapshot?.syncedAt) parts.push(`última sincronización: ${formatDate(snapshot.syncedAt)}`);
+  const parts = [`${files} ${files === 1 ? "archivo guardado" : "archivos guardados"}`, formatSize(bytes) || "0 B"];
+  if (snapshot?.syncedAt) parts.push(`actualizado: ${formatDate(snapshot.syncedAt)}`);
   summary.textContent = parts.join(" · ");
 }
 
@@ -334,7 +392,7 @@ function initUploads(): void {
     addFiles([...(fileInput.files ?? [])]);
     fileInput.value = ""; // the same file can be chosen again
   });
-  // Drag and drop anywhere on the page. Without preventDefault, Chrome would open the file instead.
+  // Drag and drop anywhere on the panel. Without preventDefault, Chrome would open the file instead.
   const hasFiles = (ev: DragEvent) => !!ev.dataTransfer?.types.includes("Files");
   let depth = 0;
   addEventListener("dragenter", (ev) => {
@@ -392,6 +450,7 @@ async function searchInside(): Promise<void> {
 }
 
 function renderResults(query: string, hits: MaterialHit[], pending: number): void {
+  closeMenu();
   const n = hits.length;
   const head = el(
     "div",
@@ -413,12 +472,12 @@ function renderResults(query: string, hits: MaterialHit[], pending: number): voi
     const where = locationLabel(h);
     const div = el("div", { className: "hit" });
     div.dataset.key = h.key;
-    const title = button(e.title, "title", openMode(e.type) === "open" ? () => void openEntry(e, "tab", h) : () => void downloadEntry(e));
     const course = snapshot?.courses.find((c) => c.id === e.courseId)?.fullname;
     const line = el("div", { className: "meta" });
     if (where) line.append(el("span", { className: "where", text: where }), document.createTextNode(" · "));
     line.append(document.createTextNode([course, e.section].filter(Boolean).join(" · ")));
-    div.append(title, line, el("div", { className: "snippet", text: cleanSnippet(h.snippet) }), actionsFor(e, h));
+    div.append(el("div", { className: "info" }, titleFor(e, h), line, el("div", { className: "snippet", text: cleanSnippet(h.snippet) })));
+    div.append(rowMenu(e, h) ?? "");
     results.append(div);
   }
 }
@@ -436,9 +495,153 @@ async function load(): Promise<void> {
   renderList();
 }
 
+// ------------------------------------------------------------------ top: «Conecta tu IA» / status, and «Ajustes»
+
+// Not "snapshot": it is large, and syncState.lastSync already says whether a sync happened.
+const STATUS_KEYS = [AGENT_KEYS.enabled, AGENT_KEYS.state, AGENT_KEYS.stats, "syncState", UPDATE_KEYS.update] as const;
+
+async function renderStatus(): Promise<void> {
+  const got = await chrome.storage.local.get([...STATUS_KEYS]);
+  const enabled = aiConnectionEnabled(got[AGENT_KEYS.enabled]);
+  const agent = got[AGENT_KEYS.state] as AgentState | undefined;
+  const stats = got[AGENT_KEYS.stats] as AgentStats | undefined;
+  const sync = got.syncState as SyncState | undefined;
+
+  // Same test as the welcome page's step 3: an AI has actually asked for something.
+  const connectedOnce = (stats?.requests ?? 0) > 0;
+  const view = statusSentence({ enabled, ...(agent ? { agent } : {}), synced: !!sync?.lastSync });
+  $("connect").hidden = connectedOnce;
+  const box = $("status");
+  // Before the first request the card says what to do; the status line then only shows a problem.
+  box.hidden = !connectedOnce && (view.tone === "ok" || view.tone === "busy");
+  box.className = `status ${view.tone}`;
+  box.querySelector(".text")!.textContent = view.text;
+  box.querySelector(".hint")!.textContent = view.hint ?? "";
+  $("copy").hidden = !connectedOnce;
+
+  const toggle = $<HTMLInputElement>("aiConnection");
+  if (document.activeElement !== toggle) toggle.checked = enabled;
+
+  const busy = !!sync?.running || !!sync?.error;
+  const syncLine = $("syncLine");
+  syncLine.hidden = !busy;
+  syncLine.textContent = busy ? sync!.text : "";
+  syncLine.classList.toggle("error", !!sync?.error);
+  const syncText = $("syncText");
+  syncText.textContent = busy ? sync!.text : lastSyncLabel(sync?.lastSync);
+  syncText.classList.toggle("error", !!sync?.error);
+  $<HTMLButtonElement>("sync").disabled = !!sync?.running;
+
+  const update = pendingUpdate(got[UPDATE_KEYS.update], VERSION);
+  $("update").replaceChildren(...(update ? [updateNotice(update)] : []));
+
+  // Technical detail, «Ajustes» only.
+  $("diag").textContent = `Versión ${VERSION} · conexión: ${agent?.state ?? "—"}${agent?.error ? ` (${agent.error})` : ""}`;
+}
+
+async function showLink(): Promise<void> {
+  $<HTMLInputElement>("linkBox").value = await currentLink();
+}
+
+async function showUsage(): Promise<void> {
+  try {
+    const { files, bytes } = await idbStore.usage();
+    $("usage").textContent = `Espacio usado: ${formatBytes(bytes)} en ${files} ${files === 1 ? "archivo" : "archivos"}`;
+  } catch {
+    $("usage").textContent = "Espacio usado: no disponible";
+  }
+}
+
+const SETTING_IDS = ["courseScope", "autoSync", "autoSyncHours", "downloadFiles", "maxFileMB", "replyWindowDays", "notify", "syncGrades"] as const;
+
+async function initSettings(): Promise<void> {
+  const s = await getSettings();
+  const save = async () => {
+    const next: Settings = {
+      courseScope: $<HTMLSelectElement>("courseScope").value as Settings["courseScope"],
+      autoSync: $<HTMLInputElement>("autoSync").checked,
+      autoSyncHours: Number($<HTMLInputElement>("autoSyncHours").value) || 6,
+      downloadFiles: $<HTMLInputElement>("downloadFiles").checked,
+      maxFileMB: Number($<HTMLInputElement>("maxFileMB").value) || 40,
+      replyWindowDays: Number($<HTMLInputElement>("replyWindowDays").value) || 0,
+      notify: $<HTMLInputElement>("notify").checked,
+      syncGrades: $<HTMLInputElement>("syncGrades").checked,
+    };
+    await chrome.storage.local.set({ settings: next });
+  };
+  $<HTMLSelectElement>("courseScope").value = s.courseScope;
+  $<HTMLInputElement>("autoSync").checked = s.autoSync;
+  $<HTMLInputElement>("autoSyncHours").value = String(s.autoSyncHours);
+  $<HTMLInputElement>("downloadFiles").checked = s.downloadFiles;
+  $<HTMLInputElement>("maxFileMB").value = String(s.maxFileMB);
+  $<HTMLInputElement>("replyWindowDays").value = String(s.replyWindowDays);
+  $<HTMLInputElement>("notify").checked = s.notify;
+  $<HTMLInputElement>("syncGrades").checked = s.syncGrades;
+  for (const id of SETTING_IDS) $(id).addEventListener("change", () => void save());
+}
+
+function initHome(): void {
+  const openWelcome = () => void chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  $("connectAi").addEventListener("click", openWelcome);
+  $("otherAi").addEventListener("click", openWelcome);
+
+  $("aiConnection").addEventListener("change", () => {
+    void chrome.storage.local.set({ [AGENT_KEYS.enabled]: $<HTMLInputElement>("aiConnection").checked });
+  });
+  for (const id of ["copy", "copyLink"]) {
+    $(id).addEventListener("click", async () => {
+      const ok = await copyText(await currentLink());
+      flash($(id), ok ? "¡Copiado!" : "No se pudo copiar: cópialo de Ajustes → Tu enlace");
+    });
+  }
+  $("sync").addEventListener("click", async () => {
+    try {
+      await send({ type: "start-sync" });
+    } catch (err) {
+      const t = $("syncText");
+      t.textContent = err instanceof Error ? err.message : String(err);
+      t.classList.add("error");
+    }
+  });
+
+  $("rotate").addEventListener("click", () => ($("confirmRotate").hidden = false));
+  $("rotateNo").addEventListener("click", () => ($("confirmRotate").hidden = true));
+  $("rotateYes").addEventListener("click", async () => {
+    const url = await changeLink();
+    $<HTMLInputElement>("linkBox").value = url;
+    $("confirmRotate").hidden = true;
+    const copied = await copyText(url);
+    flash($("rotate"), copied ? "Enlace cambiado y copiado ✓" : "Enlace cambiado ✓", 2500);
+  });
+  $("settings").addEventListener("toggle", () => {
+    if (($("settings") as HTMLDetailsElement).open) void showUsage();
+  });
+
+  // A click outside the open «⋯» menu, or Escape, closes it.
+  addEventListener("click", (ev) => {
+    if (openMenu && !openMenu.box.contains(ev.target as Node)) closeMenu();
+  });
+  addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !openMenu) return;
+    const more = openMenu.more;
+    closeMenu();
+    more.focus();
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (STATUS_KEYS.some((k) => k in changes)) void renderStatus();
+    if (AGENT_KEYS.identity in changes) void showLink();
+  });
+  void renderStatus();
+  void initSettings();
+  void showLink();
+}
+
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function main(): Promise<void> {
+  initHome();
   for (const m of SORT_MODES) {
     const o = el("option", { text: m.label });
     o.value = m.value;
@@ -449,7 +652,7 @@ async function main(): Promise<void> {
   if (isSortMode(stored[SORT_KEY])) sortMode = stored[SORT_KEY];
   sortSelect.value = sortMode;
 
-  // The visit counts from when the page opened: files stored while she is here are "Nuevo" next time.
+  // The visit counts from when the panel opened: files stored while it is open are "Nuevo" next time.
   const markVisited = () => void chrome.storage.local.set({ [LAST_VISIT_KEY]: loadedAt });
   setTimeout(markVisited, 4000);
   addEventListener("pagehide", markVisited);
@@ -482,7 +685,7 @@ async function main(): Promise<void> {
     renderList();
   });
 
-  // A sync finishing while the page is open brings new files: reload the list (filter and folds kept).
+  // A sync finishing while the panel is open brings new files: reload the list (filter and folds kept).
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes.syncState) return;

@@ -1,5 +1,5 @@
 // What the agent (the extension's link to the relay, so web AIs can read the student's data) publishes
-// in chrome.storage.local for the popup and welcome page. Pure types; no chrome APIs.
+// in chrome.storage.local for the side panel and welcome page. Pure types; no chrome APIs.
 //
 //   agent          AgentIdentity { id, secret, token }: created once on first run. Never shown, except
 //                  id + token inside the connector URL (connectorUrl() in agent/identity.ts).

@@ -21,7 +21,7 @@ test("status sentence: connected with and without data, connecting, off, errors"
   assert.equal(statusSentence({ enabled: true, synced: false }).text, "Conectando…"); // nothing written yet
   assert.equal(statusSentence({ enabled: true, agent: at("off"), synced: true }).text, "Conectando…"); // switched back on, starting
   const off = statusSentence({ enabled: false, agent: at("connected"), synced: true });
-  assert.deepEqual([off.tone, off.text], ["off", "Apagado: actívalo en el botón de la extensión"]);
+  assert.deepEqual([off.tone, off.text], ["off", "Apagado: actívalo en Ajustes, en el panel de Uniovi Virtual"]);
   assert.equal(statusSentence({ enabled: true, agent: at("offline", "socket closed"), synced: true }).tone, "error");
   const rejected = statusSentence({ enabled: true, agent: at("rejected", "bad-secret"), synced: true });
   assert.equal(rejected.tone, "error");
@@ -38,9 +38,9 @@ test("no technical words in what the student reads", () => {
         const v = statusSentence({ enabled, agent: at(s, "ws error 1006"), synced });
         assert.doesNotMatch(`${v.text} ${v.hint ?? ""}`, /servidor|t[uú]nel|relay|node|helper|socket|1006/i);
       }
-  for (const file of ["popup.html", "welcome.html"]) {
+  for (const file of ["home.html", "welcome.html"]) {
     const html = readFileSync(new URL(`../../extension/src/${file}`, import.meta.url), "utf8");
-    // Outside "Opciones avanzadas" (popup) and the maintainer-only notice (welcome).
+    // Outside «Ajustes» (side panel) and the maintainer-only notice (welcome).
     const visible = html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<details[\s\S]*?<\/details>/, "").replace(/<div id="maint"[\s\S]*?<\/div>/, "");
     assert.doesNotMatch(visible.replace(/<[^>]+>/g, " "), /servidor|t[uú]nel|relay|\bnode\b|helper/i, file);
   }
@@ -156,4 +156,20 @@ test("root package.json carries the extension's name and version", () => {
   const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as { version: string };
   assert.equal(pkg.name, "uniovi-virtual");
   assert.equal(pkg.version, manifest.version);
+});
+
+test("the extension icon opens the side panel (home.html); there is no popup", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../../extension/manifest.json", import.meta.url), "utf8")) as {
+    permissions: string[];
+    side_panel?: { default_path?: string };
+    action: Record<string, unknown>;
+    minimum_chrome_version?: string;
+  };
+  assert.ok(manifest.permissions.includes("sidePanel"));
+  assert.equal(manifest.side_panel?.default_path, "home.html");
+  assert.equal(manifest.action.default_popup, undefined);
+  assert.ok(Number(manifest.minimum_chrome_version) >= 116, "sidePanel.open() needs Chrome 116");
+  const build = readFileSync(new URL("../../scripts/build.mjs", import.meta.url), "utf8");
+  assert.match(build, /\["welcome", "home"\]/);
+  assert.doesNotMatch(build, /popup|files\.ts/);
 });

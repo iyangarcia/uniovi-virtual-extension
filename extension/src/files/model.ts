@@ -302,8 +302,8 @@ export function cleanSnippet(s: string): string {
 }
 
 /**
- * `files.html?course=<id>&q=<text>`: open on one course and/or with a search typed in.
- * `files.html?open=<key>&page=<n>`: viewer mode, one file filling the tab (see files.ts).
+ * `home.html?course=<id>&q=<text>`: open on one course and/or with a search typed in.
+ * `home.html?open=<key>&page=<n>`: viewer mode, one file filling the tab (see home.ts).
  */
 export function parseDeepLink(search: string): { course?: number; q?: string; open?: string; page?: number } {
   const p = new URLSearchParams(search);
@@ -321,7 +321,7 @@ export function parseDeepLink(search: string): { course?: number; q?: string; op
 
 /** Path of the viewer tab for a file (relative to the extension root), optionally at a PDF page. */
 export function viewerPath(key: string, page?: number): string {
-  return `files.html?open=${encodeURIComponent(key)}${page ? `&page=${page}` : ""}`;
+  return `home.html?open=${encodeURIComponent(key)}${page ? `&page=${page}` : ""}`;
 }
 
 /** Only https links to the campus become anchors; anything else (javascript:, data:, other sites…) is dropped. */

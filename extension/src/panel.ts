@@ -95,9 +95,9 @@ export function mountPanel(onSync: () => void): void {
 
     const syncBtn = h("button", syncState?.running ? { disabled: "" } : {}, syncState?.running ? "Actualizando…" : "Actualizar");
     syncBtn.addEventListener("click", onSync);
-    // Extension pages can't be linked from a web page: the background opens it.
-    const filesBtn = h("button", { class: "ghost" }, "Mis apuntes");
-    filesBtn.addEventListener("click", () => void chrome.runtime.sendMessage({ type: "open-files" } satisfies Message));
+    // Extension pages can't be linked from a web page: the background opens the side panel.
+    const openBtn = h("button", { class: "ghost" }, "Abrir Uniovi Virtual");
+    openBtn.addEventListener("click", () => void chrome.runtime.sendMessage({ type: "open-panel" } satisfies Message));
     const metaText = syncState?.running
       ? syncState.text
       : syncState?.error
@@ -105,7 +105,7 @@ export function mountPanel(onSync: () => void): void {
         : snapshot
           ? `Actualizado ${ago(snapshot.syncedAt)}`
           : "";
-    const header = h("header", {}, h("h2", {}, "Próximamente y novedades"), h("span", { class: `meta${syncState?.error ? " err" : ""}` }, metaText), filesBtn, syncBtn);
+    const header = h("header", {}, h("h2", {}, "Próximamente y novedades"), h("span", { class: `meta${syncState?.error ? " err" : ""}` }, metaText), openBtn, syncBtn);
 
     if (!snapshot) {
       root.replaceChildren(

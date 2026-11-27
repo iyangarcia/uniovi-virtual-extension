@@ -2,7 +2,7 @@ import { connectorUrl as relayConnectorUrl, RELAY_URL } from "../../../shared/re
 import { isValidIdentity, newIdentity, rotatedIdentity, type AgentIdentity } from "./protocol.ts";
 import { AGENT_KEYS, relayBases } from "./state.ts";
 
-// The extension's relay identity and connector URL, for any extension context (popup, welcome page,
+// The extension's relay identity and connector URL, for any extension context (side panel, welcome page,
 // background). Kept apart from agent/index.ts so the pages don't bundle the connection, the MCP
 // server and its SDK: this file imports only shared/relay.ts, protocol.ts and state.ts.
 

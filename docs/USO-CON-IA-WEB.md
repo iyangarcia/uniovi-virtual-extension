@@ -50,7 +50,7 @@ Y se abre la **página de bienvenida**, que te guía con lo que falta:
 
 ![Página de bienvenida](img/welcome.png)
 
-> Consejo: pulsa el icono del puzle 🧩 (arriba a la derecha de Chrome) y luego la chincheta junto a Uniovi Virtual. Así tendrás su botón siempre a mano.
+> Consejo: pulsa el icono del puzle 🧩 (arriba a la derecha de Chrome) y luego la chincheta junto a Uniovi Virtual. Así tendrás su icono siempre a mano: abre el panel con tus apuntes y ajustes.
 
 ---
 
@@ -80,7 +80,7 @@ Tu IA se conecta con un **enlace personal** que crea la extensión. Solo hay que
 
 ### Forma fácil: «Conectar automáticamente»
 
-1. Abre la página de bienvenida (o el botón de la extensión → **Cómo conectarla**).
+1. Abre la página de bienvenida (o, en el panel de la extensión, **Conectar mi IA**; si ya conectaste una, **Ajustes → Conectar otra IA**).
 2. En la tarjeta de tu IA, pulsa **Conectar automáticamente**.
 3. Chrome te pide permiso para esa página (claude.ai, chatgpt.com o gemini.google.com). Pulsa **Permitir**.
 4. Se abre la página de conectores de tu IA con el nombre y el enlace **ya escritos**.
@@ -92,7 +92,7 @@ Si algo no sale bien, la extensión te lo dice y puedes usar la forma manual.
 
 ### Forma manual: copiar y pegar
 
-1. Pulsa el botón de la extensión y luego **Copiar enlace**.
+1. Pulsa el icono de la extensión y, en su panel, **Copiar enlace** (o, antes de conectar ninguna IA, **Ajustes → Tu enlace**).
 2. Pégalo en tu IA como **conector personalizado**:
 
 **Claude (claude.ai)**
@@ -160,55 +160,57 @@ Las fechas que salen de los foros se detectan automáticamente: la IA debería c
 
 ---
 
-## 5. Mis apuntes
+## 5. El panel de Uniovi Virtual
 
-Todos los archivos que copió la extensión, ordenados por asignatura y tema, sin salir de Chrome. Ábrelo con el botón de la extensión → **Mis apuntes**.
+Pulsa el icono de Uniovi Virtual (arriba a la derecha de Chrome) y se abre su **panel** a un lado de la pantalla. Se queda abierto mientras cambias de pestaña, así que puedes tener tus apuntes al lado del campus o de tu IA. También se abre desde el panel del campus (**Abrir Uniovi Virtual**). Todo está en él: tus apuntes, el enlace para tu IA y los ajustes.
 
-![Mis apuntes](img/mis-apuntes.png)
+![Panel de Uniovi Virtual](img/panel.png)
+
+Mientras no hayas conectado tu IA, arriba verás **Conecta tu IA**: el botón **Conectar mi IA** abre la página de bienvenida. Cuando tu IA ya ha preguntado algo, en su lugar aparece una frase que te dice cómo va todo, con el botón **Copiar enlace**:
+
+- **✓ Tu IA ya puede ver tus apuntes**: todo bien.
+- **✓ Conectado** y «Abre el Campus Virtual para traer tus apuntes»: entra en el campus una vez.
+- **Sin conexión ahora mismo**: revisa tu Internet; la extensión vuelve a intentarlo sola.
+- **Apagado**: vuelve a encender **Conectar con mi IA** en **Ajustes**.
+
+![Panel recién instalado, con Conecta tu IA](img/panel-empty.png)
+
+### Mis apuntes
+
+Todos los archivos que copió la extensión, ordenados por asignatura y tema, sin salir de Chrome.
 
 - Ordena por nombre, fecha o asignatura, y filtra escribiendo en la caja.
 - **Buscar dentro de los apuntes** busca dentro del texto de los PDF y diapositivas.
 - Los archivos nuevos desde tu última visita llevan la marca **Nuevo**.
-- Al hacer clic, el PDF se abre en una pestaña nueva. Con **Ventana nueva** puedes poner dos PDF lado a lado (por ejemplo, los ejercicios y sus soluciones).
-- Word y PowerPoint no se pueden ver dentro de Chrome: usa **Descargar**.
-- Los archivos comprimidos (zip, rar…) no se copian; aparecen con un enlace al campus.
-
-![Buscar dentro de los apuntes](img/mis-apuntes-busqueda.png)
+- Al hacer clic en el nombre, el PDF se abre en una pestaña nueva.
+- El botón **⋯** de cada archivo tiene **Ventana nueva** (para poner dos PDF lado a lado, por ejemplo los ejercicios y sus soluciones) y **Descargar**. Word y PowerPoint no se pueden ver dentro de Chrome: al hacer clic se descargan.
+- Los archivos comprimidos (zip, rar…) no se copian; su nombre lleva al campus.
 
 ### Añadir tus propios archivos
 
 Tu IA también puede leer archivos que no están en el campus: tus propios apuntes o el calendario oficial de exámenes.
 
 1. Descarga el archivo. Por ejemplo, el calendario de exámenes en Excel: está en la página de tu facultad en uniovi.es.
-2. Abre **Mis apuntes** y pulsa **Añadir archivo** (o arrastra el archivo encima de la página).
+2. En el panel, pulsa **Añadir archivo** (o arrastra el archivo encima del panel).
 3. Aparece en el grupo **Mis archivos**. Ahora pregúntale a tu IA, por ejemplo: «¿Cuándo es el examen de Derecho Civil I?».
 
-Sirven los mismos tipos que en el campus: PDF, Word, PowerPoint, Excel (.xlsx), texto e imágenes. Un Excel antiguo (.xls) o una hoja .ods hay que guardarlos antes como .xlsx. Los archivos que añades tú tienen un botón **Borrar**; los del campus no, porque vuelven con la siguiente sincronización.
+Sirven los mismos tipos que en el campus: PDF, Word, PowerPoint, Excel (.xlsx), texto e imágenes. Un Excel antiguo (.xls) o una hoja .ods hay que guardarlos antes como .xlsx. Los archivos que añades tú se pueden borrar (**⋯** → **Borrar**); los del campus no, porque vuelven con la siguiente sincronización.
 
----
+### Ajustes
 
-## 6. El botón de la extensión
-
-![Ventanita de la extensión](img/popup.png)
-
-Una frase te dice cómo va todo:
-
-- **✓ Tu IA ya puede ver tus apuntes**: todo bien.
-- **✓ Conectado** y «Abre el Campus Virtual para traer tus apuntes»: entra en el campus una vez.
-- **Sin conexión ahora mismo**: revisa tu Internet; la extensión vuelve a intentarlo sola.
-- **Apagado**: vuelve a encender **Conectar con mi IA**.
-
-Además:
+Abajo del todo, en **Ajustes**:
 
 - **Conectar con mi IA**: si lo apagas, tu IA deja de poder leer tus apuntes hasta que lo vuelvas a encender. El panel del campus sigue funcionando.
-- **Copiar enlace**, **Mis apuntes** y **Cómo conectarla**.
-- En **Opciones avanzadas**, **Cambiar enlace** crea un enlace nuevo y el antiguo deja de funcionar para siempre. Úsalo solo si crees que alguien tiene tu enlace. Después tendrás que pegar el nuevo en tu IA.
+- **Sincronizar ahora**, y cada cuánto se actualiza sola, qué asignaturas y qué archivos guarda.
+- **Dejar que mi IA vea mis notas**: desmárcalo si no quieres que lea tus calificaciones.
+- **Tu enlace** y **Conectar otra IA** (abre la página de bienvenida).
+- **Cambiar enlace** crea un enlace nuevo y el antiguo deja de funcionar para siempre. Úsalo solo si crees que alguien tiene tu enlace. Después tendrás que pegar el nuevo en tu IA.
 
-![Opciones avanzadas](img/popup-advanced.png)
+![Ajustes del panel](img/panel-ajustes.png)
 
 ---
 
-## 7. Si cierras Chrome
+## 6. Si cierras Chrome
 
 Tu IA **solo** puede leer tus apuntes mientras Chrome está abierto en tu ordenador. No hace falta tener el campus abierto, solo Chrome.
 
@@ -218,7 +220,7 @@ Puedes preguntar desde el móvil (en la app de tu IA) siempre que Chrome siga ab
 
 ---
 
-## 8. Actualizar
+## 7. Actualizar
 
 Cuando haya una versión nueva, la extensión te avisará: **«Hay una versión nueva»**. Entonces:
 
@@ -230,21 +232,21 @@ Tus apuntes y tu enlace **se mantienen**: no tienes que volver a conectar la IA.
 
 ---
 
-## 9. Tu privacidad
+## 8. Tu privacidad
 
 - **Tus archivos se quedan en tu ordenador**, dentro de Chrome. No se suben a ningún sitio.
 - **Tus preguntas y las respuestas pasan por el servicio de conexión**, que solo las reenvía entre tu IA y tu Chrome. **No guarda nada.**
-- **El enlace es personal, como una contraseña.** Quien lo tenga puede leer tus asignaturas, apuntes y avisos mientras tu Chrome esté abierto. No lo compartas. Si crees que se ha filtrado, usa **Cambiar enlace** (sección 6).
+- **El enlace es personal, como una contraseña.** Quien lo tenga puede leer tus asignaturas, apuntes y avisos mientras tu Chrome esté abierto. No lo compartas. Si crees que se ha filtrado, usa **Cambiar enlace** (sección 5, Ajustes).
 - Lo que tu IA lee (un PDF, una lista de fechas, un aviso…) pasa a tu conversación con esa empresa (Anthropic, OpenAI o Google) y se rige por sus condiciones, como cualquier cosa que le escribas.
 - Todo es **de solo lectura**: la IA no puede entregar tareas, escribir en foros ni cambiar nada del campus.
 
 ---
 
-## 10. Si algo falla
+## 9. Si algo falla
 
 - **Chrome dice «Falta el archivo de manifiesto» al cargar la carpeta.** Has elegido una carpeta de más o de menos. Elige la carpeta `uniovi-virtual` que tiene dentro `manifest.json`. A veces está dentro de otra carpeta con el mismo nombre: entra en la de fuera y elige la de dentro.
 - **No veo «Cargar descomprimida».** Activa **Modo Desarrollador**, arriba a la derecha de `chrome://extensions`.
-- **La IA dice que Uniovi Virtual no está conectado.** Abre Chrome. Si ya está abierto, mira que **Conectar con mi IA** esté encendido en el botón de la extensión, y que tengas internet.
+- **La IA dice que Uniovi Virtual no está conectado.** Abre Chrome. Si ya está abierto, mira que **Conectar con mi IA** esté encendido en el panel de la extensión (**Ajustes**), y que tengas internet.
 - **La IA no encuentra mis apuntes o los datos son viejos.** Entra en el campus y espera a que termine de sincronizar. Puedes pedirle a la IA que mire `sync_status`: te dirá cuándo fue la última sincronización y si hubo avisos.
 - **La IA da un error o no responde.** Comprueba que pegaste el enlace completo. Si no funciona, bórralo de tu IA, pulsa **Copiar enlace** otra vez y vuelve a añadirlo.
 - **Chrome me avisa de que tengo extensiones en modo desarrollador.** Es normal. Déjala activada.

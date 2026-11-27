@@ -11,7 +11,7 @@ const extDist = "extension/dist";
 async function copyStatic() {
   await mkdir(extDist, { recursive: true });
   await copyFile("extension/manifest.json", `${extDist}/manifest.json`);
-  for (const page of ["popup", "welcome", "files"]) await copyFile(`extension/src/${page}.html`, `${extDist}/${page}.html`);
+  for (const page of ["welcome", "home"]) await copyFile(`extension/src/${page}.html`, `${extDist}/${page}.html`);
   await cp("extension/icons", `${extDist}/icons`, { recursive: true });
 }
 
@@ -23,7 +23,7 @@ const configs = [
   // The background service worker bundles the MCP core with unpdf, fflate and the MCP SDK (~3.9 MB).
   // MV3 module workers forbid dynamic import(), so no code splitting: esbuild inlines everything.
   {
-    entryPoints: ["extension/src/background.ts", "extension/src/popup.ts", "extension/src/welcome.ts", "extension/src/files.ts"],
+    entryPoints: ["extension/src/background.ts", "extension/src/welcome.ts", "extension/src/home.ts"],
     outdir: extDist,
     format: "esm",
     platform: "browser",

@@ -6,7 +6,7 @@ import { AGENT_KEYS, relayBases } from "../agent/state.ts";
 /**
  * The connector URL as stored right now. agent/identity.ts caches the identity per page, so a page
  * that stays open (the welcome page) would keep showing the old link after "Cambiar enlace" in the
- * popup; this reads chrome.storage every time and only falls back to connectorUrl() (which creates
+ * side panel; this reads chrome.storage every time and only falls back to connectorUrl() (which creates
  * the identity) on a first run.
  */
 export async function currentLink(): Promise<string> {

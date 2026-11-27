@@ -160,7 +160,7 @@ export function createMcpServer(store: DataStore, { remote = false, version = "0
     },
     wrap(async ({ course, gradedOnly = false }: { course?: string; gradedOnly?: boolean }) => {
       const s = await requireSnapshot();
-      if (!s.grades) return ok({ note: "Grades are not synced: the student turned them off in the extension (Opciones avanzadas), or the last sync predates them." });
+      if (!s.grades) return ok({ note: "Grades are not synced: the student turned them off in the extension (side panel, Ajustes), or the last sync predates them." });
       return ok(
         matchCourses(s, course).map((c) => ({
           course: c.shortname,

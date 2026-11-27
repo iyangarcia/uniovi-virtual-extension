@@ -1,6 +1,6 @@
 import type { AgentState } from "../agent/state.ts";
 
-// The one plain sentence the popup and the welcome page show about the AI connection.
+// The one plain sentence the side panel and the welcome page show about the AI connection.
 // Pure: no chrome APIs, so it is unit-tested in server/test/ux.test.ts.
 
 export type Tone = "ok" | "busy" | "off" | "error";
@@ -21,7 +21,7 @@ export interface StatusView {
 }
 
 export function statusSentence({ enabled, agent, synced }: StatusInput): StatusView {
-  if (!enabled) return { tone: "off", text: "Apagado: actívalo en el botón de la extensión", hint: "Mientras esté apagado, tu IA no puede ver tus apuntes." };
+  if (!enabled) return { tone: "off", text: "Apagado: actívalo en Ajustes, en el panel de Uniovi Virtual", hint: "Mientras esté apagado, tu IA no puede ver tus apuntes." };
   switch (agent?.state) {
     case "connected":
       return synced
@@ -30,7 +30,7 @@ export function statusSentence({ enabled, agent, synced }: StatusInput): StatusV
     case "offline":
       return { tone: "error", text: "Sin conexión ahora mismo", hint: "Comprueba tu Internet. Se vuelve a intentar solo." };
     case "rejected":
-      return { tone: "error", text: "No se pudo conectar", hint: "Apaga y vuelve a encender «Conectar con mi IA». Si sigue igual, pulsa «Cambiar enlace» en Opciones avanzadas y pega el enlace nuevo en tu IA." };
+      return { tone: "error", text: "No se pudo conectar", hint: "Apaga y vuelve a encender «Conectar con mi IA». Si sigue igual, pulsa «Cambiar enlace» en Ajustes y pega el enlace nuevo en tu IA." };
     default:
       // "connecting", "off" while starting up, or nothing written yet.
       return { tone: "busy", text: "Conectando…" };

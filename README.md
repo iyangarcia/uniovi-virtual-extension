@@ -5,7 +5,7 @@ A Chrome extension for **Uniovi Virtual** (Moodle). It does four things:
 1. **Panel on your dashboard.** At the top of *Área personal* it shows exams and deadlines for the next 21 days across all your courses, plus what's new since your last visit. Exam dates come from the calendar and from teachers' forum announcements; forum-detected dates are tagged *del foro*, and hovering shows the sentence they came from.
 2. **Notifications.** When a sync finds a new announcement that mentions an exam, a deadline or a date, you get a desktop notification. Clicking it opens the post.
 3. **Your AI reads your campus.** claude.ai or ChatGPT connect to the extension with one permanent personal link (a custom MCP connector). They can search your slides and PDFs, list deadlines and exam dates, and read announcements. Ready-made prompts: `semana`, `preparar_examen`, `estudiar_tema`.
-4. **Mis apuntes.** A page inside the extension to browse, search and open every synced file, e.g. two PDFs side by side.
+4. **The Uniovi Virtual side panel.** The extension icon opens Chrome's side panel: the connection status and link, «Mis apuntes» to browse, search and open every synced file (e.g. two PDFs side by side) or add your own, and the settings. Until an AI is connected it points to the setup (welcome) page.
 
 The extension syncs when you open the campus, if the last sync is older than 6 hours, using your normal login. Nothing else needs to be installed.
 
@@ -13,7 +13,7 @@ The extension syncs when you open the campus, if the last sync is older than 6 h
 
 Download page, with pictures: **<https://iyangarcia.github.io/uniovi-virtual-extension/>**. Download the zip, extract it to Documentos, then in `chrome://extensions` turn on *Modo Desarrollador* → *Cargar descomprimida* → pick the `uniovi-virtual` folder. A welcome page guides the rest.
 
-Full guide in Spanish (connecting each AI, Mis apuntes, updates, privacy, troubleshooting): **[docs/USO-CON-IA-WEB.md](docs/USO-CON-IA-WEB.md)**.
+Full guide in Spanish (connecting each AI, the side panel and Mis apuntes, updates, privacy, troubleshooting): **[docs/USO-CON-IA-WEB.md](docs/USO-CON-IA-WEB.md)**.
 
 Which AI: Claude (claude.ai, free plan: 1 custom connector), ChatGPT (free plan too), Gemini (advanced: Developer Mode, in English). The AI can only read your files while Chrome is open.
 

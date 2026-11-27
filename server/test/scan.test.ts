@@ -37,9 +37,9 @@ test("cached-only search: finds cached text, counts the rest as pending, never r
   );
 });
 
-test("files.js (Mis apuntes) does not bundle the PDF parser", async () => {
+test("home.js (side panel) does not bundle the PDF parser", async () => {
   const out = await esbuild.build({
-    entryPoints: [fileURLToPath(new URL("../../extension/src/files.ts", import.meta.url))],
+    entryPoints: [fileURLToPath(new URL("../../extension/src/home.ts", import.meta.url))],
     bundle: true,
     write: false,
     metafile: true,
@@ -49,5 +49,5 @@ test("files.js (Mis apuntes) does not bundle the PDF parser", async () => {
   });
   const inputs = Object.keys(out.metafile.inputs);
   assert.deepEqual(inputs.filter((p) => /unpdf|shared[\\/]mcp[\\/]extract\.ts/.test(p)), []);
-  assert.ok(out.outputFiles[0]!.contents.byteLength < 200_000, `files.js is ${out.outputFiles[0]!.contents.byteLength} bytes`);
+  assert.ok(out.outputFiles[0]!.contents.byteLength < 200_000, `home.js is ${out.outputFiles[0]!.contents.byteLength} bytes`);
 });

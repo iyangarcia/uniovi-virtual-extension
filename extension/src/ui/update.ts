@@ -55,7 +55,7 @@ export function updateFromRelease(release: unknown, current: string): UpdateInfo
   return { version, url };
 }
 
-/** What the popup / welcome page show: the stored update, only if still newer than the running version. */
+/** What the side panel / welcome page show: the stored update, only if still newer than the running version. */
 export function pendingUpdate(stored: unknown, current: string): UpdateInfo | undefined {
   if (!stored || typeof stored !== "object") return undefined;
   const u = stored as Partial<UpdateInfo>;

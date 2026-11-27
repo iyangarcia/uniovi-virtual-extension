@@ -205,7 +205,7 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       return null;
 
     case "upload-file":
-      // The student's own files come only from the extension's pages ("Mis apuntes"), never from a campus tab.
+      // The student's own files come only from the extension's pages (the side panel's «Mis apuntes»), never from a campus tab.
       {
         const upload = isUpload(msg.resource);
         if (upload !== msg.resource.key.startsWith("upload:") || (upload && !fromExtensionPage(sender))) throw new Error("No permitido");
@@ -261,8 +261,8 @@ async function handle(msg: Message, sender: chrome.runtime.MessageSender): Promi
       return null;
     }
 
-    case "open-files":
-      await chrome.tabs.create({ url: chrome.runtime.getURL("files.html") });
+    case "open-panel":
+      await openPanel(sender.tab?.windowId);
       return null;
 
     case "run-sync":
@@ -287,6 +287,27 @@ async function ensureAlarms() {
   if (!(await bridgeDeps.isOn())) await chrome.alarms.clear("bridge-flush");
   else if (!(await chrome.alarms.get("bridge-flush"))) await chrome.alarms.create("bridge-flush", { periodInMinutes: 1 });
   if (!(await chrome.alarms.get(UPDATE_ALARM))) await chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 360 });
+}
+
+// ---------------------------------------------------------------- side panel
+
+// The extension icon opens the side panel (home.html, manifest side_panel); there is no popup.
+// Set on every worker start: cheap, and it also covers updates from a version that had a popup.
+void chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => console.warn("[uniovi] side panel", e));
+
+/**
+ * From the campus panel's «Abrir Uniovi Virtual» click. sidePanel.open() needs that click's user
+ * gesture, so it is the first call here (no await before it); if Chrome still refuses, home.html
+ * opens as a tab.
+ */
+async function openPanel(windowId: number | undefined): Promise<void> {
+  try {
+    if (windowId === undefined) throw new Error("no window");
+    await chrome.sidePanel.open({ windowId });
+  } catch (e) {
+    console.warn("[uniovi] side panel open", e);
+    await chrome.tabs.create({ url: chrome.runtime.getURL("home.html") });
+  }
 }
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {

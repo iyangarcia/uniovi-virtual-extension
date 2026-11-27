@@ -1,6 +1,8 @@
 // The welcome page screenshots for the docs: welcome-empty.png (fresh profile, nothing synced yet)
 // and welcome.png (after seeding a small FAKE snapshot: invented courses, one assignment, one forum
-// post with an exam date). Light theme, 1100 px wide, DSF 2. Offline profile, AI connection off, the
+// post with an exam date). Light theme, 1100 px wide, DSF 2. Also the side panel (home.html) at 360 px:
+// panel-empty.png (fresh: «Conecta tu IA» card), panel.png (seeded, after a first AI request: status
+// line + Mis apuntes) and panel-ajustes.png («Ajustes» open). Offline profile, AI connection off, the
 // dev bridge failed before anything is seeded. Never real campus data.
 // usage: node welcome-shots.mjs [--out <dir>] [--headful]   (default out: scripts/shots/out)
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -49,17 +51,26 @@ try {
   const page = await browser.newPage();
   await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
   await page.setViewport({ width: 1100, height: 900, deviceScaleFactor: 2 });
-  const shoot = async (name) => {
-    await page.reload({ waitUntil: "load" });
+  const shoot = async (name, target = page, before = async () => undefined) => {
+    await target.reload({ waitUntil: "load" });
     await sleep(800);
-    await maskLink(page, "input[type=url], input#linkBox").catch(() => undefined);
+    await before();
+    await maskLink(target, "input[type=url], input#linkBox").catch(() => undefined);
     const ident = await store("agent");
-    await auditIdentity(page, { secrets: [ident.agent?.id, ident.agent?.token, ident.agent?.secret] });
-    await page.screenshot({ path: join(out, name), fullPage: true });
+    await auditIdentity(target, { secrets: [ident.agent?.id, ident.agent?.token, ident.agent?.secret] });
+    await target.screenshot({ path: join(out, name), fullPage: true });
     log("saved", join(out, name));
   };
   await page.goto(`chrome-extension://${extId}/welcome.html`, { waitUntil: "load" });
   await shoot("welcome-empty.png");
+
+  // The side panel is home.html; a tab of the panel's usual width shows the same page.
+  const panel = await browser.newPage();
+  await panel.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
+  await panel.setViewport({ width: 360, height: 760, deviceScaleFactor: 2 });
+  await panel.goto(`chrome-extension://${extId}/home.html`, { waitUntil: "load" });
+  await shoot("panel-empty.png", panel);
+  await page.bringToFront();
 
   // Seed the fake snapshot through the same messages the content script sends.
   const send = (m) => page.evaluate((msg) => chrome.runtime.sendMessage(msg), m);
@@ -71,6 +82,15 @@ try {
   await send({ type: "progress", text: "2 asignaturas, 3 materiales, 1 mensaje", running: false });
   await until(async () => !!(await store("syncState")).syncState?.lastSync, 5000);
   await shoot("welcome.png");
+
+  // As if an AI had already asked once (the welcome page's step 3): the panel drops the card.
+  await sw.evaluate(() => chrome.storage.local.set({ agentStats: { requests: 1 } }));
+  await panel.bringToFront();
+  await shoot("panel.png", panel);
+  await shoot("panel-ajustes.png", panel, async () => {
+    await panel.evaluate(() => (document.getElementById("settings").open = true));
+    await sleep(300);
+  });
   log(`bridge requests failed: ${bridge.count()}`);
 } catch (e) {
   failed = true;

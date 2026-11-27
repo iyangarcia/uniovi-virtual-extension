@@ -4,12 +4,14 @@
   "version": "0.3.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnBmQsxWb6hitDhCnte8YZdb55mGX2cDiIvpFU8shDNNuiumg3FkrvVLGI86a3OKuxy4D/U7v1JqtOY6uYrCMModNuFubClN10cRjaB/5hhD5Ou9zdZYGq+he2P+ytxi5pLXbGBNK0g5UyvtZ72zHK2I/PyeINUwMffXpGqysPGBlZ3Rs07Hbquw+TSfCeLDsCyTkQTjByVZOHvgBQnSh++aGHV383mOtX+GAc+MB0wsx+rfJaQMNekOUsv/gQ6oZn/oYxFeAtbxK3fJfhPohY1hh4Q2krsnuGbpX5vHhAg4p32oKQcUBX3ChFZBfBjAsE+EE1t/u5kCNK6oSRBFNQwIDAQAB",
   "description": "Tus próximos exámenes, entregas y avisos del Campus Virtual, y tus apuntes para tu IA.",
+  "minimum_chrome_version": "120",
   "permissions": [
     "storage",
     "unlimitedStorage",
     "alarms",
     "notifications",
-    "scripting"
+    "scripting",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.campusvirtual.uniovi.es/*",
@@ -43,11 +45,13 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_title": "Uniovi Virtual",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"
     }
+  },
+  "side_panel": {
+    "default_path": "home.html"
   }
 }

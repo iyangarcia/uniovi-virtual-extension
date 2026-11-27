@@ -1,6 +1,6 @@
 import type { UpdateInfo } from "./update.ts";
 
-// Small DOM helpers shared by the popup and the welcome page. textContent only: no innerHTML.
+// Small DOM helpers shared by the side panel and the welcome page. textContent only: no innerHTML.
 
 type Child = Node | string | null | undefined | false;
 
@@ -35,7 +35,7 @@ export function flash(button: HTMLElement, done: string, ms = 1800) {
   setTimeout(() => (button.textContent = original), ms);
 }
 
-/** "Hay una versión nueva" box with the two steps (popup and welcome page). */
+/** "Hay una versión nueva" box with the two steps (side panel and welcome page). */
 export function updateNotice(update: UpdateInfo): HTMLElement {
   const link = h("a", { href: update.url, target: "_blank", rel: "noopener" }, "Descarga el zip");
   return h(

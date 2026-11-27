@@ -228,7 +228,7 @@ test("deep links, campus links and download names are sanitised", () => {
   // Viewer mode: the key round-trips through the URL, page only with a file.
   const key = "12:/Tema 2/ejercicios & soluciones#1.pdf";
   assert.deepEqual(parseDeepLink(`?${viewerPath(key, 3).split("?")[1]}`), { open: key, page: 3 });
-  assert.equal(viewerPath("1:/a.pdf"), "files.html?open=1%3A%2Fa.pdf");
+  assert.equal(viewerPath("1:/a.pdf"), "home.html?open=1%3A%2Fa.pdf");
   assert.deepEqual(parseDeepLink("?page=4"), {});
   assert.equal(safeCampusUrl("javascript:alert(1)"), null);
   assert.equal(safeCampusUrl("not a url"), null);

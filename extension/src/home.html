@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Uniovi Virtual</title>
+    <link rel="icon" href="icons/icon48.png" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6676; --line: #e1e5eb; --soft: #f0f3f7;
+        --accent: #1f5fa8; --accent-fg: #ffffff; --accent-soft: #e6eef8; --new: #1b7a3d; --new-soft: #e3f4e8; --focus: #2f7de1;
+        --ok: #1b7a32; --ok-bg: #e6f4ea; --busy: #8a5a00; --busy-bg: #fff4d6; --err: #b3261e; --err-bg: #fde8e7; --off: #5d6676; --off-bg: #eceff3;
+        font: 14px/1.45 system-ui, "Segoe UI", sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15181d; --card: #1e2229; --text: #e6e9ee; --muted: #9aa3b2; --line: #2f3540; --soft: #262b33;
+          --accent: #7fb0ec; --accent-fg: #10151c; --accent-soft: #23324a; --new: #7fd49a; --new-soft: #1f3a29; --focus: #7fb0ec;
+          --ok: #7ad08f; --ok-bg: #17321f; --busy: #f2c35b; --busy-bg: #3a2f12; --err: #ff8a80; --err-bg: #3d1a18; --off: #a3adb8; --off-bg: #2a2f35;
+        }
+      }
+      * { box-sizing: border-box; }
+      /* Chrome gives extension pages a 75% body font size by default: set it explicitly. */
+      body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+      main { max-width: 760px; margin: 0 auto; padding: 14px 12px 40px; }
+      button, select, input { font: inherit; color: inherit; }
+      button { cursor: pointer; }
+      button:disabled { opacity: .55; cursor: default; }
+      :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+      .top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+      .top img { width: 28px; height: 28px; }
+      .top h1 { font-size: 18px; margin: 0; }
+      h2 { font-size: 17px; margin: 0; }
+
+      .btn { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); white-space: nowrap; }
+      .btn:hover { border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+      .btn.big { width: 100%; padding: 11px; font-size: 15px; font-weight: 700; margin-top: 10px; }
+      .btn.small { padding: 4px 10px; font-size: 13px; }
+      a.btn { text-decoration: none; color: inherit; display: inline-block; }
+
+      /* ---- top: «Conecta tu IA» card, or the status line */
+      .connect { background: var(--card); border: 2px solid var(--accent); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+      .connect p { margin: 6px 0 0; }
+      .status { border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+      .status .words { flex: 1; min-width: 0; }
+      .status .text { font-size: 15px; font-weight: 650; }
+      .status .hint { font-size: 13px; }
+      .status .hint:empty { display: none; }
+      .status.ok { background: var(--ok-bg); color: var(--ok); }
+      .status.busy { background: var(--busy-bg); color: var(--busy); }
+      .status.error { background: var(--err-bg); color: var(--err); }
+      .status.off { background: var(--off-bg); color: var(--off); }
+      .status .btn { color: var(--text); flex: none; }
+      .syncline { margin: 0 0 8px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+      .syncline.error { color: var(--err); }
+      .update { border: 1px solid var(--accent); background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; }
+      .update ol { margin: 6px 0; padding-left: 20px; }
+      .update p { margin: 0; color: var(--muted); }
+      .update a { color: var(--accent); font-weight: 600; }
+
+      /* ---- «Mis apuntes» */
+      #files { margin-top: 16px; }
+      .files-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .files-head h2 { flex: 1; }
+      .summary { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+      .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+      .toolbar input[type="search"] { flex: 1 1 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+      .toolbar .btn.primary { flex: 1 1 auto; }
+      .toolbar select { flex: 0 1 auto; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+      .notice { color: var(--muted); margin: 8px 0; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
+      #list details > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; gap: 8px; align-items: baseline; }
+      #list details > summary::-webkit-details-marker { display: none; }
+      #list details > summary::before { content: "▸"; color: var(--muted); width: 1em; flex: none; }
+      #list details[open] > summary::before { content: "▾"; }
+      summary .course { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+      summary .count { color: var(--muted); font-size: 12px; flex: none; }
+      h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 0; padding: 8px 12px 2px; border-top: 1px solid var(--line); }
+      #list ul { list-style: none; margin: 0; padding: 0 0 4px; }
+      li.file { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; }
+      li.file:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+      .type { flex: none; width: 50px; text-align: center; font-size: 11px; font-weight: 600; padding: 2px 0; border-radius: 6px; background: var(--accent-soft); color: var(--accent); overflow: hidden; text-overflow: ellipsis; }
+      .type.pdf { background: #fbe7e6; color: #b3261e; }
+      .type.word { background: #e4ecfa; color: #1d4fa0; }
+      .type.powerpoint { background: #fcebe2; color: #b3471b; }
+      .type.excel { background: #e3f3e8; color: #1c6b3a; }
+      .type.image { background: #f1e7f8; color: #6f3a99; }
+      .type.text { background: #ececec; color: #444; }
+      @media (prefers-color-scheme: dark) {
+        .type.pdf { background: #44201e; color: #f3a59f; }
+        .type.word { background: #1e2c47; color: #9dbcf2; }
+        .type.powerpoint { background: #45281a; color: #f2b08e; }
+        .type.excel { background: #1b3a26; color: #8fd5a6; }
+        .type.image { background: #36263f; color: #d3b0ee; }
+        .type.text { background: #33363b; color: #cfd2d7; }
+      }
+      .info { flex: 1; min-width: 0; }
+      .title { display: block; max-width: 100%; text-align: left; border: 0; padding: 0; background: none; color: var(--text); font-weight: 500; overflow-wrap: anywhere; text-decoration: none; }
+      button.title:hover, a.title:hover { color: var(--accent); text-decoration: underline; }
+      .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+      .badge-new { flex: none; font-size: 11px; font-weight: 700; color: var(--new); background: var(--new-soft); padding: 1px 7px; border-radius: 999px; }
+      li.skipped .title, li.skipped .type { opacity: 0.55; }
+
+      /* per-row «⋯» menu */
+      .menu { position: relative; flex: none; }
+      .menu .more { width: 30px; height: 28px; border: 1px solid transparent; border-radius: 8px; background: none; font-size: 18px; line-height: 1; color: var(--muted); }
+      .menu .more:hover, .menu .more[aria-expanded="true"] { border-color: var(--line); background: var(--card); color: var(--text); }
+      .menu-items { position: absolute; right: 0; top: calc(100% + 2px); z-index: 5; min-width: 170px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.15); padding: 4px; display: flex; flex-direction: column; }
+      .menu-items[hidden] { display: none; }
+      .menu-items button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; white-space: nowrap; }
+      .menu-items button:hover { background: var(--soft); }
+      .menu-items .danger:hover, .menu-items .danger.armed { color: #c62828; }
+      .menu-items .danger.armed { font-weight: 700; }
+      @media (prefers-color-scheme: dark) { .menu-items .danger:hover, .menu-items .danger.armed { color: #f08a84; } }
+
+      #results .hit { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-top: 1px solid var(--line); }
+      #results .hit .info { flex: 1; }
+      .hit .where { font-weight: 600; color: var(--accent); }
+      .hit .snippet { color: var(--muted); font-size: 13px; margin: 2px 0 4px; overflow-wrap: anywhere; }
+      .results-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; }
+      .results-head h2 { font-size: 15px; }
+      .empty { text-align: center; padding: 28px 16px; }
+      .empty p { font-size: 15px; margin: 0 auto 14px; }
+      #uploadNotes { margin: 0 0 10px; padding: 0; list-style: none; }
+      #uploadNotes li { padding: 3px 0; overflow-wrap: anywhere; }
+      #uploadNotes li.ok { color: var(--new); }
+      #uploadNotes li.ok::before { content: "✓ "; }
+      #uploadNotes li.error { color: #c62828; }
+      #uploadNotes li.error::before { content: "✕ "; }
+      @media (prefers-color-scheme: dark) { #uploadNotes li.error { color: #f08a84; } }
+      #dropHint { position: fixed; inset: 8px; z-index: 10; display: flex; align-items: center; justify-content: center; border: 3px dashed var(--accent); border-radius: 16px; background: color-mix(in srgb, var(--accent-soft) 88%, transparent); color: var(--accent); font-size: 19px; font-weight: 600; text-align: center; padding: 20px; pointer-events: none; }
+      #dropHint[hidden] { display: none; }
+
+      /* ---- «Ajustes» */
+      .settings { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 6px; font-size: 13px; }
+      .settings > summary { cursor: pointer; color: var(--muted); padding: 6px 0; font-size: 14px; font-weight: 600; }
+      .settings .block { margin: 12px 0; }
+      .settings label { display: flex; align-items: center; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+      .settings input[type="number"] { width: 4em; }
+      .settings .small { font-size: 12px; color: var(--muted); }
+      .settings .danger { color: var(--err); }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 15px; font-weight: 600; cursor: pointer; }
+      .switch input { appearance: none; width: 46px; height: 26px; border-radius: 13px; background: var(--line); position: relative; cursor: pointer; flex: none; margin: 0; transition: background .15s; }
+      .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+      .switch input:checked { background: var(--accent); }
+      .switch input:checked::after { left: 23px; }
+      #syncText { flex: 1; color: var(--muted); white-space: pre-wrap; }
+      #syncText.error { color: var(--err); }
+      #confirmRotate { margin-top: 6px; padding: 8px; border-radius: 8px; background: var(--err-bg); }
+      #confirmRotate .row { margin-top: 6px; }
+      #linkBox { width: 100%; font: 11px ui-monospace, monospace; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); }
+
+      /* ---- viewer mode (home.html?open=<key>) */
+      body.viewer { overflow: hidden; }
+      body.viewer iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top"><img src="icons/icon48.png" alt="" /><h1>Uniovi Virtual</h1></header>
+      <div id="update"></div>
+
+      <section id="connect" class="connect" hidden>
+        <h2>Conecta tu IA</h2>
+        <p>Falta un paso: conecta tu IA (Claude, ChatGPT o Gemini) para que pueda leer tus apuntes y avisos del Campus Virtual. Solo se hace una vez.</p>
+        <button id="connectAi" class="btn primary big" type="button">Conectar mi IA</button>
+      </section>
+      <div id="status" class="status busy" role="status" aria-live="polite">
+        <div class="words"><div class="text">Conectando…</div><div class="hint"></div></div>
+        <button id="copy" class="btn small" type="button" hidden>Copiar enlace</button>
+      </div>
+      <p id="syncLine" class="syncline" hidden></p>
+
+      <section id="files" aria-labelledby="filesTitle">
+        <div class="files-head">
+          <h2 id="filesTitle">Mis apuntes</h2>
+          <button id="addFile" class="btn small" type="button" title="Añade tus propios archivos (por ejemplo, el calendario de exámenes) para que tu IA también los lea">Añadir archivo</button>
+          <input id="fileInput" type="file" multiple hidden />
+        </div>
+        <p id="summary" class="summary"></p>
+        <ul id="uploadNotes" aria-live="polite" hidden></ul>
+        <div id="toolbar" class="toolbar" hidden>
+          <input id="filter" type="search" placeholder="Filtrar por nombre o tema" aria-label="Filtrar archivos" autocomplete="off" />
+          <button id="searchInside" class="btn primary" type="button">Buscar dentro de los apuntes</button>
+          <select id="sort" aria-label="Ordenar"></select>
+        </div>
+        <section id="results" class="card" hidden></section>
+        <p id="noMatch" class="notice" hidden></p>
+        <div id="list"></div>
+      </section>
+
+      <details id="settings" class="settings">
+        <summary>Ajustes</summary>
+        <label class="switch"><span>Conectar con mi IA</span><input type="checkbox" role="switch" id="aiConnection" checked /></label>
+        <div class="block row">
+          <span id="syncText"></span>
+          <button id="sync" class="btn small" type="button">Sincronizar ahora</button>
+        </div>
+        <div class="block">
+          <strong>Sincronización</strong>
+          <label>Asignaturas
+            <select id="courseScope">
+              <option value="inprogress">Solo las de este curso</option>
+              <option value="all">Todas (también pasadas)</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="autoSync" /> Actualizar sola cada <input type="number" id="autoSyncHours" min="1" /> h</label>
+          <label><input type="checkbox" id="downloadFiles" /> Guardar archivos de hasta <input type="number" id="maxFileMB" min="1" /> MB</label>
+          <label>Respuestas del foro de los últimos <input type="number" id="replyWindowDays" min="0" /> días</label>
+          <label><input type="checkbox" id="notify" /> Avisarme de anuncios nuevos</label>
+          <label><input type="checkbox" id="syncGrades" /> Dejar que mi IA vea mis notas</label>
+        </div>
+        <div class="block">
+          <strong>Tu enlace</strong>
+          <input id="linkBox" readonly aria-label="Tu enlace para la IA" />
+          <div class="small">Es privado: quien lo tenga puede leer tus apuntes. No lo compartas.</div>
+          <div class="row" style="margin-top: 6px">
+            <button id="copyLink" class="btn small" type="button">Copiar enlace</button>
+            <button id="rotate" class="btn small" type="button">Cambiar enlace</button>
+            <button id="otherAi" class="btn small" type="button">Conectar otra IA</button>
+          </div>
+          <div id="confirmRotate" hidden>
+            <div class="danger">El enlace antiguo dejará de funcionar y tendrás que pegar el nuevo en tu IA.</div>
+            <div class="row"><button id="rotateYes" class="btn small" type="button">Sí, cambiar</button><button id="rotateNo" class="btn small" type="button">Cancelar</button></div>
+          </div>
+        </div>
+        <div class="block small" id="usage">Espacio usado: …</div>
+        <div class="block small" id="diag"></div>
+      </details>
+    </main>
+    <div id="dropHint" hidden>Suelta aquí tus archivos para añadirlos a Mis apuntes</div>
+    <script type="module" src="home.js"></script>
+  </body>
+</html>

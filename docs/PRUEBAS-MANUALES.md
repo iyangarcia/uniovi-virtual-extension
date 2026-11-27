@@ -83,7 +83,7 @@ On the real sites, logged in:
 
 - [ ] Close every Chrome window (and check Task Manager: no `chrome.exe` left). Ask the AI something: it shows the Spanish "Uniovi Virtual no está conectado: abre Chrome…" message, not a generic error.
 - [ ] Open Chrome (without opening the campus). Within about a minute the same question works.
-- [ ] Turn off **Conectar con mi IA** in the popup: the AI gets the same message. Turn it on: it works again.
+- [ ] Turn off **Conectar con mi IA** in the side panel (Ajustes): the AI gets the same message. Turn it on: it works again.
 - [ ] Laptop suspended for an hour, then resumed: it reconnects by itself.
 
 ## 5. Update v1 → v2
@@ -91,18 +91,24 @@ On the real sites, logged in:
 With a real install that has synced and has a connected AI:
 
 - [ ] Note the link (Copiar enlace) and the file count in Mis apuntes.
-- [ ] Publish v2 (section 0). Within a day (or after reloading the extension), the popup and welcome page show "Hay una versión nueva".
+- [ ] Publish v2 (section 0). Within a day (or after reloading the extension), the side panel and welcome page show "Hay una versión nueva".
 - [ ] Follow the 2 pictured steps: extract over the same `Documentos\uniovi-virtual` (Reemplazar), press ⟳ in `chrome://extensions`.
 - [ ] The version is v2; the extension ID is still `amagekgnbkaeigjhbenkilkhoklkdieo`; the link is unchanged; Mis apuntes shows the same files; the AI still answers without re-pasting.
+- [ ] From 0.3.0 (popup) to the side-panel version: after ⟳ the icon opens the side panel (no popup), with the same files and link.
 
-## 6. Mis apuntes
+## 6. The side panel (home.html) and Mis apuntes
 
-- [ ] Opens from the popup and from the campus panel. Courses → sections → files match the campus.
+- [ ] Clicking the extension icon opens the side panel; the badge still shows «…» while syncing and «!» on an error.
+- [ ] Fresh profile: the panel shows the «Conecta tu IA» card; «Conectar mi IA» opens the welcome page. After the AI's first request the card becomes the status line with Copiar enlace, and the welcome page's step 3 shows «Desde ahora, pulsa el icono…».
+- [ ] The panel stays open when switching tabs.
+- [ ] On the campus `/my/`, «Abrir Uniovi Virtual» opens the side panel (or, if Chrome refuses, home.html as a tab). The welcome page's «Abrir el panel de Uniovi Virtual» does the same.
+- [ ] «Ajustes»: Conectar con mi IA, Sincronizar ahora, every sync setting, «Dejar que mi IA vea mis notas», Tu enlace + Copiar enlace, Cambiar enlace (two-step), Conectar otra IA, Espacio usado, version line.
+- [ ] Courses → sections → files match the campus.
 - [ ] Sort by name, date and course; the filter box narrows the list; text search finds a phrase inside a PDF.
 - [ ] "Nuevo" marks appear for files since the last visit and clear after it.
-- [ ] Open two PDFs (e.g. exercises and solutions) with **Ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
-- [ ] A .docx / .pptx offers **Descargar** and saves one copy. A zip shows as a campus link.
-- [ ] **Añadir archivo**: download the exam-calendar .xlsx from uniovi.es and add it (button and drag and drop): it shows under «Mis archivos»; a .zip, a .xls and a .ods are refused with a message; the AI answers «¿cuándo es el examen de…?» from it; **Borrar** (click twice) removes it, and a sync doesn't bring it back. (Automated: `cd scripts/shots && node verify-uploads.mjs`.)
+- [ ] Clicking a PDF's title opens it in the viewer tab. Open two PDFs (e.g. exercises and solutions) with **⋯ → Ventana nueva** and snap them side by side (Win + ←/→). Both render in Chrome's viewer.
+- [ ] Clicking a .docx / .pptx title downloads one copy (also **⋯ → Descargar**). A zip's title links to the campus.
+- [ ] **Añadir archivo**: download the exam-calendar .xlsx from uniovi.es and add it (button and drag and drop): it shows under «Mis archivos»; a .zip, a .xls and a .ods are refused with a message; the AI answers «¿cuándo es el examen de…?» from it; **⋯ → Borrar** (click twice) removes it, and a sync doesn't bring it back. (Automated: `cd scripts/shots && node verify-uploads.mjs`.)
 
 ## 7. Sync on the real campus
 
@@ -112,7 +118,7 @@ With a real install that has synced and has a connected AI:
 - [ ] Materials: compare 2–3 courses on the campus with Mis apuntes / `list_materials` (folders, PDFs, slides, links).
 - [ ] Downloaded files open and are not HTML login pages (the real redirect path is not covered by tests).
 - [ ] A second sync is incremental: noticeably faster, no re-download of unchanged files.
-- [ ] Notifications: a new important announcement triggers one notification when «Avisarme de anuncios nuevos» is on (popup → Opciones avanzadas).
+- [ ] Notifications: a new important announcement triggers one notification when «Avisarme de anuncios nuevos» is on (side panel → Ajustes).
 
 ## 8. Efficiency (time it)
 
@@ -132,7 +138,7 @@ Also watch: Chrome's CPU while idle with the AI connection on (Task Manager → 
 ## 9. Privacy and safety
 
 - [ ] Nothing in the chats shows the campus password or session cookie.
-- [ ] Cambiar enlace (popup → Opciones avanzadas): the old link now gives the "Uniovi Virtual no está conectado" message in the AI (it points at an id nobody answers any more), even with Chrome open; the new one works after pasting it.
+- [ ] Cambiar enlace (side panel → Ajustes): the old link now gives the "Uniovi Virtual no está conectado" message in the AI (it points at an id nobody answers any more), even with Chrome open; the new one works after pasting it.
 - [ ] The extension never posts or submits anything on the campus.
 - [ ] Cloudflare dashboard → the Worker: logs/observability are off; the Durable Object stores only the secret hash.
 

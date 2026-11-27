@@ -1,4 +1,5 @@
-// «Añadir archivo» on «Mis apuntes» in Chrome for Testing with the built extension (extension/dist):
+// «Añadir archivo» on «Mis apuntes» (side panel page home.html, opened here as a 400 px wide tab) in
+// Chrome for Testing with the built extension (extension/dist):
 // a fresh offline profile, the dev bridge failed before anything is stored, generated files only.
 // Adds an .xlsx and a .pdf (file input) and a .txt (drag and drop), checks they appear under «Mis
 // archivos» and in IndexedDB; .zip, .xls and .ods are refused with their messages; a campus file has no
@@ -94,8 +95,8 @@ try {
   await sw.evaluate(() => chrome.storage.local.set({ aiConnection: false, devRelayUrl: "https://relay.invalid" }));
 
   const page = await browser.newPage();
-  await page.setViewport({ width: 1100, height: 900 });
-  await page.goto(`chrome-extension://${extId}/files.html`, { waitUntil: "load" });
+  await page.setViewport({ width: 400, height: 900 });
+  await page.goto(`chrome-extension://${extId}/home.html`, { waitUntil: "load" });
   await page.waitForSelector("#addFile");
 
   const notes = () => page.$$eval("#uploadNotes li", (lis) => lis.map((li) => ({ kind: li.className, text: li.textContent })));
@@ -153,10 +154,10 @@ try {
   check(r.modname === "upload" && r.courseId === 0 && r.cmid === 0 && r.section === "Mis archivos" && r.url === "" && r.filename === XLSX && r.filesize > 0, "resource follows the upload contract");
   check(!x.snapshot, "no snapshot written (uploads never go into the snapshot)");
 
-  // Opening goes through the viewer tab (files.html?open=<key>).
+  // Clicking the title opens the viewer tab (home.html?open=<key>).
   const pdfRow = `li.file[data-key="${pdfKey}"]`;
-  const tabP = browser.waitForTarget((t) => t.url().includes(`files.html?open=${encodeURIComponent(pdfKey)}`), { timeout: 10000 });
-  await page.click(`${pdfRow} .actions button`);
+  const tabP = browser.waitForTarget((t) => t.url().includes(`home.html?open=${encodeURIComponent(pdfKey)}`), { timeout: 10000 });
+  await page.click(`${pdfRow} button.title`);
   const viewerTab = await (await tabP).page();
   await viewerTab.waitForSelector("iframe", { timeout: 10000 }).catch(() => null);
   check(!!(await viewerTab.$("iframe")) && (await viewerTab.title()) === PDF, `upload opens in the viewer (title «${await viewerTab.title()}»)`);
@@ -205,7 +206,11 @@ try {
   // cached text too: the background extracts it a few seconds after the upload).
   const pdfTexts = await until(async () => (await idb(pdfKey)).texts.length > 0, 20000);
   check(!!pdfTexts, "PDF text extracted by the background before the delete");
+  // «Borrar» is in the row's «⋯» menu: hidden until the menu opens, and the menu stays open between clicks.
   const del = `li.file[data-key="${pdfKey}"] [data-action="delete"]`;
+  check(await page.$eval(del, (b) => !b.checkVisibility()), "«Borrar» hidden until «⋯» is opened");
+  await page.click(`li.file[data-key="${pdfKey}"] button.more`);
+  check(await page.$eval(del, (b) => b.checkVisibility()), "«⋯» shows «Borrar»");
   await page.click(del);
   check((await page.$eval(del, (b) => b.textContent)) === "¿Seguro?", "first click asks «¿Seguro?»");
   check(!!(await idb(pdfKey)).file, "nothing deleted after the first click");
